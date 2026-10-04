@@ -112,6 +112,7 @@
   const THIN = { style: 'thin', color: { argb: 'FFBFBFBF' } };
   const BORDER = { top: THIN, left: THIN, bottom: THIN, right: THIN };
   const CENTER = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  const SHRINK = { horizontal: 'center', vertical: 'middle', shrinkToFit: true }; // 셀에 맞춤 (긴 "특수(지능형과학실)" 등)
 
   function colName(n) { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
 
@@ -168,7 +169,9 @@
         const row = ws1.addRow(vals);
         row.height = 30;
         row.eachCell({ includeEmpty: true }, (cell, cn) => {
-          cell.border = BORDER; cell.alignment = CENTER;
+          cell.border = BORDER;
+          // 이름 칸(반·특별실·복도)은 줄바꿈 대신 셀 크기에 맞춰 글자를 줄임. 과목·비고는 줄바꿈 유지
+          cell.alignment = cn >= 5 && cn < head1.length ? SHRINK : CENTER;
           const s = cn >= 5 ? kinds[cn - 5] : null;
           if (s && s.study) cell.fill = F.yellow;
           if (s && !assign[s.id]) { cell.font = { bold: true, color: { argb: 'FFC92A2A' } }; cell.fill = F.red; }
@@ -241,7 +244,7 @@
       row.height = 20;
       row.eachCell({ includeEmpty: true }, (cell, cn) => {
         cell.border = BORDER;
-        cell.alignment = cn === 3 ? { horizontal: 'center', vertical: 'middle', shrinkToFit: true } : CENTER;
+        cell.alignment = cn === 3 || (cn >= firstP && cn < statCol) ? SHRINK : CENTER;
         if (cn >= firstP && cn < statCol) { cell.numFmt = '@'; if (fills[cn - firstP]) cell.fill = fills[cn - firstP]; }
         if (t.type === '제외') cell.font = { color: { argb: 'FF999999' } };
       });

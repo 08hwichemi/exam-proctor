@@ -5,7 +5,7 @@
 ## 지금 상태
 
 - 파이썬(PyQt) 시험 감독 배정 프로그램(`main.py`)을 **서버 없는 웹앱**으로 옮겨 `main` 브랜치에 병합 완료. GitHub Pages 주소: `https://08hwichemi.github.io/exam-proctor/` (Pages 설정은 저장소 Settings → Pages에서 `main` / root).
-- PR #1~#7 병합 완료. 이후 작업 브랜치 `claude/beautiful-lamport-g36no8`(PR #8: 교사 탭 창 높이 맞춤, 결과 요약 칩).
+- PR #1~#7 병합 완료. 이후 작업 브랜치 `claude/beautiful-lamport-g36no8`(PR #8: 교사 탭 창 높이 맞춤, 결과 요약 칩 / PR #9: 설명서 챕터형 개편, 요약 칩 확대, 엑셀 셀 맞춤).
 - 암호(라이선스 키)는 제거. `keygen.py`, `main.py`는 참고용으로만 남아 있음(비밀 단어가 공개 저장소에 노출되어 있으니 파이썬 버전을 계속 배포한다면 바꿔야 함).
 
 ## 파일 구성
@@ -16,7 +16,7 @@
 | `css/style.css` | 디자인 체계(13px 기준, CSS 변수, 일차 색 4종 `day-c0~3`). 교사 탭·결과 탭은 `--chrome-h`로 창 높이에 맞추고 표 안에서만 스크롤 |
 | `js/engine.js` | 배정 엔진. 입력 해석(`parseCell`, `parseHomeroom`), 모델(`buildModel`), 최적화(`createOptimizer`: 그리디 초안 + 담금질), 검사(`evaluate`), 서명(`inputSignature`). Node에서도 로드됨 |
 | `js/excel.js` | ExcelJS로 교사 명단·이전 결과 읽기, 결과 3개 시트 쓰기(`exportResult`) |
-| `js/app.js` | 화면 전부. 상태(`state`), 자동 저장(localStorage `examProctor.v2`), 백업 파일, 예전 DATA SAVE 변환(`fromLegacy`), 4개 탭 렌더러, 결과 수정 모달, 설명서 |
+| `js/app.js` | 화면 전부. 상태(`state`), 자동 저장(localStorage `examProctor.v2`), 백업 파일, 예전 DATA SAVE 변환(`fromLegacy`), 4개 탭 렌더러, 결과 수정 모달, 설명서(`HELP_CHAPTERS`: 챕터별 넘김, `demoState`·`withDemo`·`captureTab`·`shot`으로 실제 렌더러를 보기 자료로 돌려 미리보기와 빨간 번호표를 그림) |
 | `vendor/exceljs.min.js` | ExcelJS 4.4.0 동봉(학교망 CDN 차단 대비). 글꼴(Pretendard)만 CDN이며 막히면 시스템 글꼴로 대체 |
 | `tests/engine.test.js` | 엔진 단위·통합 테스트 + 예전 파이썬 방식(500회 몬테카를로) 이식본과 비교 |
 | `tests/verify.js` | 검증 리포트: 하한선 비교, 1~4차 연간 시뮬레이션, 같은 교실 금지 영향 |
@@ -45,7 +45,10 @@ cell = { name, study: [반], exclude: [반], special, room, multi }
 - 엔진 결과는 이론상 하한선과 같거나 1시간 차(55명 사례). 남는 차이는 규칙(본인 시험이 많은 과목, 고사담당 1교시) 때문.
 - 디자인 방향: 상용 프로그램처럼 절제된 색, 밀도 높은 배치, 스크롤 최소화. 사용자는 24인치(약 1920~2000px)와 노트북(1366px)에서 봄.
 - 교사 탭(명단·특수실·예외)과 결과 탭은 페이지 스크롤 없이 탭 높이를 창에 맞추고(`#tab-*.active` flex 열, 높이 `100vh - var(--chrome-h)`), 긴 표는 각자 안에서 스크롤. 1280px 이하에서는 세로 쌓임으로 돌아감.
-- 결과 요약(부족·위반·누적 범위·평균·교실중복·📌)은 큰 카드 대신 배정 머리줄의 작은 칩(`kpiHTML`)으로 둬 표 높이를 확보.
+- 결과 요약(부족·위반·누적 범위·평균·교실중복·📌)은 큰 카드 대신 배정 머리줄의 칩(`kpiHTML`, 버튼과 같은 32px 높이)으로 둬 표 높이를 확보. 1366px에서도 한 줄.
+- 설명서는 세로 스크롤 한 장이 아니라 11개 챕터를 이전/다음으로 넘기는 구조. 각 챕터의 "실제 화면" 상자는 스크린샷이 아니라 보기 자료(`demoState`, 교사 48명·2일)로 진짜 렌더러를 돌려 만든 HTML(`inert`로 조작 불가)이며, `shot(html, selector, [[selector, 번호]])`로 요소에 빨간 번호표를 붙임. UI 구조가 바뀌면 선택자(`data-act`, `data-bind` 등)를 같이 손봐야 함. 입력 요소(input/select)는 번호표를 부모에 붙임.
+- 엑셀: 감독표·개인별시간표 본문의 이름 칸은 `shrinkToFit`(셀에 맞춤), 머리글 과목·과목 열·비고는 줄바꿈 유지.
+- 전역 `word-break: keep-all`로 한글 단어 중간 줄바꿈("1차고/사") 방지.
 - 추가반은 교시·학년당 하나(두 과목이 동시에 치러져도 교실은 하나만 추가). 과목별 추가반은 사용자가 필요 없다고 확인함(2026-10-04).
 
 ## 검증 방법

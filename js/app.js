@@ -647,7 +647,7 @@
     <div class="panel actionbar no-print">
       <div class="panel-head">
         <h2>배정 · ${esc(state.term)}</h2>${helpDot('s5')}
-        ${r ? `<span class="muted small">배정 ${timeText(r.createdAt)}</span>` : ''}
+        ${r ? `<span class="muted small" title="배정한 시각">${timeText(r.createdAt)}</span>` : ''}
         ${kpiHTML(model, ev, pinCount)}
         <span class="spacer"></span>
         ${r ? `${pinCount ? `<button class="btn sm ghost" data-act="unpin-all">📌 고정 모두 풀기</button>` : ''}
@@ -834,7 +834,7 @@
       return `<button class="cand ${kind}" data-pick="${esc(it.t.name)}" data-kind="${kind}" data-other="${esc(it.other || '')}"><b>${esc(it.t.name)}</b>${it.t.type !== '일반' ? `<span class="type-tag">${esc(it.t.type)}</span>` : ''} <small>${it.info}</small>${extra}</button>`;
     };
     return `
-      <input type="search" id="candSearch" placeholder="이름 검색" style="width:100%;margin-bottom:10px">
+      <div class="cand-search" style="margin-bottom:10px"><input type="search" id="candSearch" placeholder="이름 검색" style="width:100%"></div>
       <div class="cand-group"><h4>바로 넣을 수 있는 선생님 (누적 적은 순)</h4><div class="cand-list">${free.map((x) => btn(x, 'free')).join('') || '<span class="muted">없음</span>'}</div></div>
       <div class="cand-group"><h4>같은 교시 다른 자리와 맞바꾸기</h4><div class="cand-list">${swap.map((x) => btn(x, 'swap')).join('') || '<span class="muted">없음</span>'}</div></div>
       <details class="cand-group"><summary style="cursor:pointer;font-weight:600;color:var(--ink-2)">규칙상 어려운 선생님 ${no.length}명 — 그래도 넣을 수는 있습니다</summary><div class="cand-list" style="margin-top:6px">${no.map((x) => btn(x, 'no')).join('')}</div></details>`;
@@ -1018,180 +1018,378 @@
   }
 
   // ---------------------------------------------------------------
-  // 설명서
+  // 설명서 — 챕터별로 한 장씩 넘기며, 실제 화면(같은 렌더러로 그린 미리보기)을 함께 보여 줌
   // ---------------------------------------------------------------
-  function helpHTML() {
-    const swatch = (c) => `<span class="sw" style="background:${c}"></span>`;
-    return `<div class="help-layout">
-    <nav class="help-toc">
-      <a href="#s0">시작하기</a>
-      <a href="#s0-backup" class="sub">자료 보관과 백업</a>
-      <a href="#s0-flow" class="sub">한 해 운영 흐름</a>
-      <a href="#s1">1. 기본 설정</a>
-      <a href="#s1-options" class="sub">옵션 설명</a>
-      <a href="#s1-days" class="sub">반 수·일차·교시</a>
-      <a href="#s2">2. 시험 과목</a>
-      <a href="#s2-paste" class="sub">엑셀에서 붙여넣기</a>
-      <a href="#s3">3. 교사 명단 · 예외</a>
-      <a href="#s3-type" class="sub">구분과 목표시수</a>
-      <a href="#s3-excel" class="sub">엑셀 양식</a>
-      <a href="#s4" class="sub">특수실 · 예외 감독자</a>
-      <a href="#s5">4. 배정 결과</a>
-      <a href="#s5-edit" class="sub">결과 직접 수정</a>
-      <a href="#s5-excel" class="sub">엑셀 파일 구성</a>
-      <a href="#rules">배정 규칙과 원리</a>
-      <a href="#faq">자주 묻는 질문</a>
-    </nav>
-    <div class="help">
-      <h2 id="s0">시작하기</h2>
-      <p>이 프로그램은 시험 감독을 <b>규칙을 지키면서 시수가 고르게</b> 배정하고, 결과를 엑셀로 내보냅니다. 설치 없이 링크로 열며, 서버 없이 이 브라우저 안에서만 동작합니다.</p>
-      <ol>
+
+  // 설명서용 보기 자료: 2일 6교시, 7/7/7반, 교사 48명, 특수실 1, 예외 2 (2차 고사)
+  function demoState() {
+    const s = defaultState();
+    s.term = '2차 고사';
+    s.classes = [7, 7, 7];
+    s.days = [newDay(3), newDay(3)];
+    s.days[0].date = '4/27'; s.days[1].date = '4/28';
+    const put = (d, p, g, cell) => Object.assign(s.days[d].subjects[p - 1][g - 1], normalizeCell(cell));
+    put(0, 1, 1, { name: '국어' }); put(0, 1, 2, { name: '문학' }); put(0, 1, 3, { name: '독서' });
+    put(0, 2, 1, { name: '통합과학' }); put(0, 2, 2, { name: '수학Ⅰ', study: [7] }); put(0, 2, 3, { name: '세계사/경제', multi: true });
+    put(0, 3, 1, { name: '한국사' }); put(0, 3, 2, { name: '영어Ⅰ', special: true, room: '어학실' }); put(0, 3, 3, { name: '자습' });
+    put(1, 1, 1, { name: '수학' }); put(1, 1, 2, { name: '화학Ⅰ', exclude: [7] }); put(1, 1, 3, { name: '물리학Ⅱ' });
+    put(1, 2, 1, { name: '영어' }); put(1, 2, 2, { name: '동아시아사' }); put(1, 2, 3, { name: '확률과통계' });
+    put(1, 3, 1, { name: '통합사회', study: [6, 7] }); put(1, 3, 2, { name: '생명과학Ⅰ' }); put(1, 3, 3, { name: '' });
+    const sur = ['김', '이', '박', '최', '정', '강', '조', '윤', '장', '임', '한', '오', '서', '신', '권', '황'];
+    const given = ['지연', '민수', '서준', '하은', '도윤', '수아', '예준', '지우', '현우', '서연', '준서', '다은', '시우', '채원', '우진', '민서'];
+    const subj = ['국어', '국어', '국어/문학', '독서', '수학', '수학', '수학', '확률과통계', '영어', '영어', '영어', '영어', '통합과학', '물리학', '화학', '생명과학', '지구과학', '한국사', '통합사회', '세계사', '경제', '윤리', '동아시아사', '지리',
+      '체육', '체육', '음악', '미술', '정보', '기술가정', '일본어', '중국어', '한문', '국어', '수학', '영어', '과학', '사회', '체육', '진로', '보건', '사서', '특수', '국어', '수학', '영어', '역사', '미술'];
+    const homerooms = [];
+    for (let g = 1; g <= 3; g++) for (let c = 1; c <= 7; c++) homerooms.push(`${g}-${c}`);
+    homerooms.push('3-부장');
+    for (let i = 0; i < 48; i++) {
+      const b = Math.floor(i / 16);
+      const t = newTeacher();
+      t.name = sur[i % 16] + given[(i % 16 + 5 * b) % 16];
+      t.subject = subj[i];
+      t.homeroom = i < homerooms.length ? homerooms[i] : '';
+      t.type = i === 44 ? '고사담당' : i === 45 ? '원로' : i === 46 ? '순회' : i === 47 ? '제외' : '일반';
+      if (t.type === '원로') t.target = '4';
+      t.prev = String(4 + ((i * 7) % 5));
+      s.teachers.push(t);
+    }
+    s.teachers[42].type = '고사담당';
+    s.specials = [{ room: '특수학급', teacher: s.teachers[42 - 1].name, hours: '3' }];
+    s.days[0].exceptions.push({ period: '1', name: s.teachers[30].name, reason: '출장' });
+    s.days[1].exceptions.push({ period: '전체', name: s.teachers[31].name, reason: '연가' });
+    return s;
+  }
+
+  let demoCache = null;
+  function demoBundle() {
+    if (demoCache) return demoCache;
+    const s = normalizeState(demoState());
+    const model = E.buildModel(s);
+    const opt = E.createOptimizer(model, { seed: 7, runs: 1, iterations: 40000 });
+    while (opt.step(10000) < 1) { /* 짧게 */ }
+    const assign = opt.result().assign;
+    const pinId = model.slots.find((x) => x.kind === 'class' && assign[x.id]);
+    s.result = { createdAt: new Date().toISOString(), term: s.term, sig: E.inputSignature(s), assign, pinned: pinId ? { [pinId.id]: true } : {} };
+    demoCache = s;
+    return s;
+  }
+
+  // 실제 렌더러를 보기 자료로 잠깐 돌려 HTML 조각을 얻음 (화면의 진짜 상태는 건드리지 않음)
+  function withDemo(fn, sub) {
+    const real = state, realSub = ui.sub, realRunning = running;
+    state = demoBundle(); if (sub) ui.sub = sub; running = false;
+    try { return fn(); } finally { state = real; ui.sub = realSub; running = realRunning; }
+  }
+  function captureTab(key) {
+    const el = $('#tab-' + key);
+    const keep = el.innerHTML;
+    renderers[key]();
+    const html = el.innerHTML;
+    el.innerHTML = keep;
+    return html;
+  }
+  // 미리보기 상자: html에서 selector 요소만 골라 담고, callouts([selector, 번호])로 빨간 번호표를 붙임
+  function shot(html, selector, callouts, opt) {
+    opt = opt || {};
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    const wrap = document.createElement('div');
+    const nodes = selector ? Array.from(tpl.content.querySelectorAll(selector)) : Array.from(tpl.content.children);
+    nodes.forEach((n) => wrap.appendChild(n));
+    (opt.remove ? [].concat(opt.remove) : []).forEach((sel) => wrap.querySelectorAll(sel).forEach((n) => n.remove()));
+    (callouts || []).forEach(([sel, n]) => {
+      let el = wrap.querySelector(sel);
+      if (!el) return;
+      if (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) el = el.parentElement; // 입력 요소는 안에 넣을 수 없으니 감싸는 요소에
+      el.classList.add('co-host');
+      const m = document.createElement('i'); m.className = 'co'; m.textContent = n;
+      el.appendChild(m);
+    });
+    wrap.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
+    wrap.querySelectorAll('[list]').forEach((n) => n.removeAttribute('list'));
+    return `<figure class="shot ${opt.cls || ''}"><figcaption>실제 화면${opt.title ? ' · ' + opt.title : ''}</figcaption><div class="shot-body" inert style="${opt.style || ''}">${wrap.innerHTML}</div></figure>`;
+  }
+  const co = (n) => `<i class="co inline">${n}</i>`;
+  const kv = (rows, heads) => `<table class="help-table">${heads ? `<tr>${heads.map((h) => `<th>${h}</th>`).join('')}</tr>` : ''}${rows.map((r) => `<tr>${r.map((c, i) => (i === 0 ? `<th>${c}</th>` : `<td>${c}</td>`)).join('')}</tr>`).join('')}</table>`;
+  const swatch = (c) => `<span class="sw" style="background:${c}"></span>`;
+
+  // 챕터 정의. anchors: 각 화면의 ? 버튼이 가리키는 세부 주제
+  const HELP_CHAPTERS = [
+    { id: 's0', title: '시작하기', anchors: ['s0-backup'], html() {
+      const steps = `<nav class="stepper">${STEPS.map((st, i) => `<button class="step ${i === 0 ? 'active' : i < 3 ? 'done' : ''}"><span class="step-no">${i + 1}</span><span class="step-txt"><b>${st.title}</b><small>${['2차 고사 · 2일 6교시 · 7/7/7반', '18칸 중 17칸 입력', '48명 · 특수실 1 · 예외 2', '배정 준비됨'][i]}</small></span></button>`).join('')}</nav>`;
+      const top = $('.topbar').outerHTML;
+      return `
+      <p class="lead">이 프로그램은 시험 감독을 <b>규칙을 지키면서 시수가 고르게</b> 배정하고, 결과를 엑셀로 내보냅니다. 설치 없이 링크로 열며, 서버 없이 이 브라우저 안에서만 동작합니다. 설명서는 <b>다음 →</b> 버튼으로 한 장씩 넘기며 읽습니다. 각 장의 "실제 화면" 상자는 보기 자료로 그린 진짜 화면이며, 빨간 번호가 아래 설명의 번호입니다.</p>
+      ${shot(top + steps, null, [['[data-act="help"]', 1], ['[data-act="backup-save"]', 2], ['[data-act="backup-load"]', 3], ['#saveState', 4], ['.step:nth-child(1)', 5], ['.step:nth-child(4) .step-txt', 6]], { title: '화면 위쪽' })}
+      <ol class="co-list">
+        <li>${co(1)}<b>설명서</b> — 이 창입니다. 각 화면의 <span class="help-dot-demo">?</span> 버튼과 "자세히" 버튼은 그 부분의 장을 바로 엽니다.</li>
+        <li>${co(2)}<b>백업 저장</b> — 입력한 자료 전체를 파일(.json) 하나로 내 컴퓨터에 받습니다. 노란 점(●)은 마지막 백업 뒤 바뀐 내용이 있다는 뜻입니다.</li>
+        <li>${co(3)}<b>백업 불러오기</b> — 받아 둔 파일로 화면을 그대로 복원합니다. 예전 파이썬 프로그램의 DATA SAVE 파일도 됩니다.</li>
+        <li>${co(4)}<b>자동 저장 표시</b> — 입력하는 즉시 이 브라우저에 저장되며 시각이 보입니다.</li>
+        <li>${co(5)}<b>단계 버튼</b> — 1 → 4 순서로 진행합니다. 누르면 그 단계로 이동하고, 각 단계 위 "할 일" 줄의 <b>다음</b> 버튼으로도 넘어갑니다.</li>
+        <li>${co(6)}<b>입력 상태</b> — 단계마다 지금 입력된 내용이 요약되어 보입니다. 빨간 글씨는 해결할 문제가 있다는 뜻입니다.</li>
+      </ol>
+      <h3 id="s0-backup">자료는 어디에 저장되나요</h3>
+      <ul>
+        <li>입력하는 즉시 <b>이 컴퓨터의 이 브라우저</b>에 자동 저장됩니다. 같은 컴퓨터·같은 브라우저로 다시 열면 그대로 이어집니다.</li>
+        <li>다른 컴퓨터에서 쓰거나 브라우저 기록을 지울 때를 대비해 <b>백업 저장</b>으로 파일을 받아 두세요. 설정·과목·교사·예외·배정 결과(직접 고친 칸 포함)가 모두 들어 있습니다.</li>
+        <li>시크릿 창(비공개 창)이나 브라우저 설정에 따라 자동 저장이 안 될 수 있습니다. 이때는 상단에 경고가 나타나니 백업 파일로 보관하세요.</li>
+        <li>두 사람이 같은 컴퓨터를 쓰면: 브라우저 사용자(프로필)가 다르면 자료가 따로 저장됩니다. 같은 프로필이면 하나의 자료를 공유하니 백업 파일로 각자 보관하세요.</li>
+      </ul>`;
+    } },
+
+    { id: 's0-flow', title: '한 해 운영 흐름', anchors: [], html() {
+      const box = (n, t, d, cls) => `<div class="flow-box ${cls || ''}"><b>${n}</b><span>${t}</span><small>${d}</small></div>`;
+      return `
+      <p class="lead">1년에 네 번(1차~4차 고사) 쓰며, 회차가 넘어갈 때 <b>누적 시수</b>와 <b>들어갔던 교실</b>이 다음 회차로 이어집니다.</p>
+      <div class="flow">
+        ${box('1차 고사', '처음부터 입력', '회차를 1차로 두고 반 수·과목·교사를 입력합니다. 이전 누적은 쓰지 않습니다.')}
+        <i>→</i>
+        ${box('2·3차 고사', '누적 이어가기', '지난 결과 화면의 <b>누적 반영 → 다음 회차</b>를 누르거나, 지난 결과 엑셀을 3단계에서 불러옵니다. 그다음 과목·일차·예외만 새 시험에 맞게 고칩니다.')}
+        <i>→</i>
+        ${box('4차 고사', '3학년 제외', '3학년 과목 칸을 비워 두고(감독 없음), <b>3학년 담임·부장 제외</b> 옵션을 켭니다. 이분들의 시수는 3차까지의 누적을 기준으로 봅니다.')}
+        <i>→</i>
+        ${box('새 학년도', '다시 1차로', '1차 고사로 바꾸면 누적과 교실 이력을 쓰지 않습니다. 명단만 고쳐 다시 시작하거나 <b>전체 초기화</b> 후 새로 입력합니다.', 'muted')}
+      </div>
+      <h3>회차마다 하는 일</h3>
+      <ol class="steps-list">
         <li><b>1. 기본 설정</b> — 회차, 반 수, 시험 일차와 교시 수</li>
         <li><b>2. 시험 과목</b> — 교시별 학년 과목, 자습·제외 반, 추가반</li>
         <li><b>3. 교사 명단 · 예외</b> — 이름·과목·담임·구분·목표시수·이전 누적, 특수실 담당자, 교시별로 감독이 어려운 선생님</li>
-        <li><b>4. 배정 결과</b> — 배정 실행, 결과 수정, 엑셀 저장, 다음 회차 준비</li>
+        <li><b>4. 배정 결과</b> — 배정 실행 → 검토·직접 수정 → 엑셀 저장 → 누적 반영</li>
       </ol>
-      <p>화면 위쪽의 단계 표시에는 각 단계의 입력 상태가 함께 보입니다. 단계는 순서대로 하지 않아도 되지만, 2단계 과목 칸과 3단계 예외 칸의 수는 1단계의 일차·교시 수에 따라 자동으로 바뀝니다.</p>
+      <div class="note">단계는 순서대로 하지 않아도 되지만, 2단계 과목 칸과 3단계 예외 칸의 수는 1단계의 일차·교시 수에 따라 자동으로 바뀝니다.</div>`;
+    } },
 
-      <h3 id="s0-backup">자료 보관과 백업</h3>
-      <ul>
-        <li>입력하는 즉시 <b>이 컴퓨터의 이 브라우저</b>에 자동 저장됩니다. 상단에 "자동 저장됨" 시각이 보입니다. 같은 컴퓨터·같은 브라우저로 다시 열면 그대로 이어집니다.</li>
-        <li>다른 컴퓨터에서 쓰거나 브라우저 기록을 지울 때를 대비해 <b>백업 저장</b>(상단 오른쪽)으로 파일(.json) 하나를 받아 두세요. 설정·과목·교사·예외·배정 결과(직접 고친 칸 포함)가 모두 들어 있습니다.</li>
-        <li><b>백업 불러오기</b>로 그 파일을 열면 화면이 그대로 복원됩니다. 예전 파이썬 프로그램의 DATA SAVE 파일(.json)도 불러올 수 있으며, 과목명 뒤의 <code>*(장소)</code> 표기는 추가반 버튼으로 자동 변환됩니다.</li>
-        <li>백업 버튼의 노란 점(●)은 마지막 백업 이후 바뀐 내용이 있다는 표시입니다.</li>
-        <li>시크릿 창(비공개 창)이나 브라우저 설정에 따라 자동 저장이 안 될 수 있습니다. 이때는 상단에 경고가 나타나니 백업 파일로 보관하세요.</li>
-      </ul>
-
-      <h3 id="s0-flow">한 해 운영 흐름</h3>
-      <table>
-        <tr><th>시기</th><th>할 일</th></tr>
-        <tr><td>1차 고사</td><td>회차를 <b>1차 고사</b>로 두고 처음부터 입력합니다. 이전 누적은 쓰지 않습니다.</td></tr>
-        <tr><td>2·3차 고사</td><td>두 가지 방법 중 하나로 누적을 이어갑니다. ① 지난 결과 화면에서 <b>누적 반영 → 다음 회차</b>를 누르면 누적과 교실 이력이 자동으로 넘어갑니다. ② 또는 3단계에서 <b>이전 회차 결과 엑셀에서 누적 불러오기</b>로 지난 엑셀 파일을 읽습니다. 그다음 과목·일차·예외만 새 시험에 맞게 고칩니다.</td></tr>
-        <tr><td>4차 고사</td><td>3학년은 보통 시험을 보지 않으므로 3학년 과목 칸을 비워 둡니다(감독 없음). <b>3학년 담임·부장 제외</b> 옵션이 켜져 있으면 이분들은 배정에서 빠지며, 시수는 3차까지의 누적을 기준으로 봅니다.</td></tr>
-        <tr><td>새 학년도</td><td>1차 고사로 바꾸면 누적과 교실 이력을 쓰지 않습니다. 명단만 고쳐서 다시 시작하거나, <b>전체 초기화</b> 후 새로 입력합니다.</td></tr>
-      </table>
-
-      <h2 id="s1">1. 기본 설정</h2>
-      <h3 id="s1-options">옵션 설명</h3>
-      <table>
-        <tr><th>옵션</th><th>설명</th><th>권장</th></tr>
-        <tr><td>배정 회차</td><td>1차~4차. 2차부터는 교사 명단의 "이전 누적"을 더해 누적이 적은 선생님께 더 배정합니다.</td><td>해당 회차</td></tr>
-        <tr><td>학년별 복도 감독 수</td><td>교시마다 학년별로 두는 복도 감독 인원. 0이면 복도 감독 없음.</td><td>2</td></tr>
-        <tr><td>4차: 3학년 담임·부장 제외</td><td>4차 고사에서만 보입니다. 담임 칸이 <code>3-</code>로 시작하는 선생님(3-1 … 3-부장)을 배정에서 뺍니다.</td><td>켬</td></tr>
-        <tr><td>전체 자습 교시에도 교실 감독</td><td>학년 전체가 자습인 교시에 교실마다 감독을 넣을지. 끄면 복도 감독만 둡니다.</td><td>학교 방침대로</td></tr>
-        <tr><td>같은 교실에 두 번 넣지 않음</td><td>한 선생님을 같은 학년-반 교실에 다시 넣지 않습니다. <b>이번 시험 안에서</b> 또는 <b>올해 이전 회차까지</b>(이전 결과 엑셀에서 불러온 교실 이력 포함) 중 고릅니다. 교사 한 명이 한 시험에 교실 3~4번 들어가고 교실은 20개가 넘어, 켜도 부족 자리가 생기지 않습니다.</td><td>켬</td></tr>
-        <tr><td>3학년 담임 연간 보정 (고급)</td><td>4차에 빠지는 3학년 담임은 3차까지의 평균에 맞추는 것이 원칙이므로 <b>0</b>으로 둡니다. 연말 합계까지 맞추고 싶을 때만 1을 넣으면 1~3차에서 회차당 1시간씩 더 배정합니다.</td><td>0</td></tr>
-      </table>
+    { id: 's1', title: '1. 기본 설정', anchors: ['s1-options', 's1-days'], html() {
+      const html = withDemo(() => captureTab('setup'));
+      return `
+      <p class="lead">회차·반 수·시험 일차를 정하는 화면입니다. 옵션은 기본값 그대로 두어도 됩니다.</p>
+      ${shot(html, '.grid-2', [['[data-bind="term"]', 1], ['[data-bind="options.corridors"]', 2], ['[data-bind="options.studyHallClassroom"]', 3], ['[data-bind="options.noRepeatRoom"]', 4], ['[data-bind="classes.0"]', 5], ['[data-bind="days.0.date"]', 6], ['[data-bind="days.0.periods"]', 7], ['[data-act="day-add"]', 8]])}
+      <h3 id="s1-options">회차와 옵션</h3>
+      <ol class="co-list">
+        <li>${co(1)}<b>배정 회차</b> — 1차~4차. 2차부터는 교사 명단의 "이전 누적"을 더해 누적이 적은 선생님께 더 배정합니다.</li>
+        <li>${co(2)}<b>학년별 복도 감독 수</b> — 교시마다 학년별로 두는 복도 감독 인원. 0이면 복도 감독 없음. 보통 2.</li>
+        <li>${co(3)}<b>전체 자습 교시에도 교실 감독</b> — 학년 전체가 자습인 교시에 교실마다 감독을 넣을지. 끄면 복도 감독만 둡니다. 학교 방침대로.</li>
+        <li>${co(4)}<b>같은 교실에 두 번 넣지 않음</b> — 한 선생님을 같은 학년-반 교실에 다시 넣지 않습니다. <b>이번 시험 안에서</b> 또는 <b>올해 이전 회차까지</b>(이전 결과 엑셀에서 불러온 교실 이력 포함) 중 고릅니다. 켜도 부족 자리가 생기지 않습니다.</li>
+      </ol>
+      ${kv([['4차: 3학년 담임·부장 제외', '4차 고사에서만 보입니다. 담임 칸이 <code>3-</code>로 시작하는 선생님(3-1 … 3-부장)을 배정에서 뺍니다. 권장: 켬'], ['3학년 담임 연간 보정 (고급)', '4차에 빠지는 3학년 담임은 3차까지의 평균에 맞추는 것이 원칙이므로 <b>0</b>으로 둡니다. 연말 합계까지 맞추고 싶을 때만 1을 넣으면 1~3차에서 회차당 1시간씩 더 배정합니다.']], ['그 밖의 옵션', '설명'])}
       <h3 id="s1-days">반 수 · 일차 · 교시</h3>
-      <ul>
-        <li><b>학년별 반 수</b>를 바꾸면 2단계의 자습/제외 번호 버튼 개수가 바로 바뀝니다. 이미 입력한 과목은 그대로 남습니다.</li>
-        <li><b>+ 일차 추가</b>로 시험 날짜를 늘리고, 날짜(예: 4/27)와 그날의 <b>교시 수</b>를 적습니다. 교시 수를 줄여도 입력했던 과목은 지워지지 않고 숨겨지므로, 다시 늘리면 되살아납니다.</li>
-        <li>일차를 삭제하면 그날의 과목과 예외 입력도 함께 지워집니다(확인 창이 뜹니다).</li>
-      </ul>
+      <ol class="co-list">
+        <li>${co(5)}<b>학년별 반 수</b> — 바꾸면 2단계의 자습/제외 번호 버튼 개수가 바로 바뀝니다. 이미 입력한 과목은 그대로 남습니다.</li>
+        <li>${co(6)}<b>날짜</b> — 결과표와 엑셀에 그대로 적힙니다(예: 4/27).</li>
+        <li>${co(7)}<b>교시 수</b> — 그날의 시험 교시 수. 줄여도 입력했던 과목은 지워지지 않고 숨겨지므로, 다시 늘리면 되살아납니다.</li>
+        <li>${co(8)}<b>+ 일차 추가</b> — 시험 날짜를 늘립니다. 일차를 삭제(✕)하면 그날의 과목과 예외 입력도 함께 지워집니다(확인 창이 뜹니다).</li>
+      </ol>`;
+    } },
 
-      <h2 id="s2">2. 시험 과목</h2>
-      <p>일차별 표에서 교시마다 1·2·3학년의 시험 과목을 적습니다. 칸 하나는 다음으로 이루어집니다.</p>
-      <table>
-        <tr><th>항목</th><th>설명</th></tr>
-        <tr><td>과목명</td><td>그 교시 그 학년의 시험 과목. <b>비워 두면 "시험 없음"</b>으로 보고 감독을 넣지 않습니다. <code>자습</code>이라고 적으면 학년 전체 자습입니다. 같은 시간에 두 과목이 치러지면 <b>+과목</b>을 눌러 두 번째 칸에 적습니다(두 과목 교사 모두 그 시간 감독에서 빠집니다). 결과·엑셀에는 <code>세계사/화학</code>처럼 표시됩니다.</td></tr>
-        <tr><td>+추가반</td><td>이동수업 등으로 교실이 하나 더 필요할 때 누릅니다. 옆에 나타나는 칸에 장소(예: 음악실)를 적으면 결과와 엑셀에 그 이름이 들어가고, 비우면 "8반"처럼 마지막 반 다음 번호가 됩니다.</td></tr>
-        <tr><td>자습 번호</td><td>${swatch('#ffe58a')}그 반이 자습임을 표시합니다. 자습 교실 감독은 "자습 시수"로 따로 셉니다. <b>자습</b> 글자를 누르면 모든 반을 한 번에 켜고 끕니다.</td></tr>
-        <tr><td>제외 번호</td><td>${swatch('#ffc9c9')}그 반에는 감독을 넣지 않습니다(예: 그 반 학생 전원이 다른 곳에서 시험). <b>제외</b> 글자를 누르면 모든 반을 한 번에 켜고 끕니다. 같은 반을 자습과 제외에 동시에 켤 수 없으며, 나중에 누른 쪽이 남습니다.</td></tr>
-        <tr><td>요약 줄</td><td>칸 오른쪽 아래에 "교실 7 · 복도 2"처럼 그 칸에서 생기는 감독 자리 수가 바로 표시됩니다.</td></tr>
-      </table>
+    { id: 's2', title: '2. 시험 과목', anchors: ['s2-paste'], html() {
+      const html = withDemo(() => captureTab('subjects'));
+      return `
+      <p class="lead">일차별 표에서 교시마다 1·2·3학년의 시험 과목을 적습니다. 엑셀 표를 복사해 붙여넣으면 한 번에 채워집니다.</p>
+      ${shot(html, '.panel', [['[data-act="subj-paste"]', 1], ['[data-subjpart="0,1,1,0"]', 2], ['.sc-mini.sp.on', 3], ['[data-subjpart="0,2,3,0"]', 4], ['tr:nth-child(2) td:nth-child(3) .chips.study', 5], ['tr:nth-child(1) td:nth-child(2) .chips.excl', 6], ['tr:nth-child(3) td:nth-child(4) .sc-sum', 7]], { remove: '.days-grid .day-card:not(:first-child)', title: '1일차 표 (2일차 이후는 아래로 이어짐)' })}
+      <ol class="co-list">
+        <li>${co(1)}<b>엑셀에서 붙여넣기</b> — 큰 입력창을 엽니다. 1·2·3학년 세 열(또는 일차·시험일·교시가 포함된 여섯 열)을 붙여넣으면 1일차 1교시부터 차례로 채웁니다.</li>
+        <li>${co(2)}<b>과목명</b> — 그 교시 그 학년의 시험 과목. <b>비워 두면 "시험 없음"</b>으로 보고 감독을 넣지 않습니다. <code>자습</code>이라고 적으면 학년 전체 자습입니다.</li>
+        <li>${co(3)}<b>+추가반</b> — 이동수업 등으로 교실이 하나 더 필요할 때 누릅니다. 아래에 나타나는 칸에 장소(예: 어학실)를 적으면 결과와 엑셀에 그 이름이 들어가고, 비우면 "8반"처럼 마지막 반 다음 번호가 됩니다.</li>
+        <li>${co(4)}<b>+과목</b> — 같은 시간에 두 과목이 치러지면 눌러서 두 번째 칸에 적습니다. 두 과목 교사 모두 그 시간 감독에서 빠지며, 결과·엑셀에는 <code>세계사/경제</code>처럼 표시됩니다. 교실은 반 수대로 하나씩이므로 추가반은 하나면 됩니다.</li>
+        <li>${co(5)}<b>자습 번호</b> ${swatch('#ffe58a')} — 그 반이 자습임을 표시합니다. 자습 교실 감독은 "자습 시수"로 따로 셉니다. <b>자습</b> 글자를 누르면 모든 반을 한 번에 켜고 끕니다.</li>
+        <li>${co(6)}<b>제외 번호</b> ${swatch('#ffc9c9')} — 그 반에는 감독을 넣지 않습니다(예: 그 반 학생 전원이 다른 곳에서 시험). 같은 반을 자습과 제외에 동시에 켤 수 없으며, 나중에 누른 쪽이 남습니다.</li>
+        <li>${co(7)}<b>요약 줄</b> — "교실 7 · 복도 2"처럼 그 칸에서 생기는 감독 자리 수가 바로 표시됩니다.</li>
+      </ol>
       <div class="note">학년 전체가 자습인 교시(<code>자습</code>이라고 적거나 모든 반의 자습 번호를 켠 경우)는 1단계의 "전체 자습 교시에도 교실 감독" 옵션에 따라 교실 감독을 넣거나 복도 감독만 둡니다.</div>
       <h3 id="s2-paste">엑셀에서 붙여넣기</h3>
       <ul>
         <li>엑셀에서 과목 표를 드래그해 복사(<kbd>Ctrl</kbd>+<kbd>C</kbd>)한 뒤, 시작할 과목 칸을 클릭하고 붙여넣기(<kbd>Ctrl</kbd>+<kbd>V</kbd>)하면 그 칸부터 아래·오른쪽으로 채워집니다. 1교시 1학년 칸에 붙여넣으면 가장 편합니다.</li>
-        <li>오른쪽 위 <b>엑셀에서 붙여넣기</b> 버튼은 큰 입력창을 엽니다. 1·2·3학년 세 열(또는 일차·시험일·교시가 포함된 여섯 열)을 붙여넣으면 1일차 1교시부터 차례로 채웁니다.</li>
         <li>붙여넣기는 과목명만 바꾸고, 이미 눌러 둔 자습·제외·추가반은 그대로 둡니다. 과목명에 <code>*(장소)</code>가 들어 있으면 추가반으로 자동 변환됩니다.</li>
-      </ul>
+        <li><b>모두 지우기</b>는 모든 일차의 과목명·자습·제외·추가반을 지웁니다. 일차와 교시 수는 남습니다.</li>
+      </ul>`;
+    } },
 
-      <h2 id="s3">3. 교사 명단 · 예외</h2>
-      <table>
-        <tr><th>열</th><th>설명</th></tr>
-        <tr><td>이름</td><td>교사 이름. 같은 이름이 둘이면 빨갛게 표시됩니다. 동명이인은 <code>홍길동A</code>처럼 구분해 주세요.</td></tr>
-        <tr><td>과목</td><td>담당 과목. 여러 과목은 <code>/</code>로 구분합니다(예: <code>화학/윤리</code>). <b>본인 과목 시험 시간에는 감독에서 빠집니다.</b> <code>수학</code> 교사는 <code>수학Ⅰ</code>·<code>수학Ⅱ</code>·<code>수학(미적)</code> 시험과 같은 과목으로 봅니다. 시험 과목명과 표기가 달라 짝을 찾지 못하면 4단계 점검 목록에 표시됩니다.</td></tr>
-        <tr><td>담임</td><td><code>2-5</code>처럼 학년-반. 부장은 <code>3-부장</code>. 담임은 본인 반 교실에 들어가지 않습니다. 담임이 아니면 비웁니다.</td></tr>
-        <tr><td>구분</td><td>아래 표 참고.</td></tr>
-        <tr><td>목표시수</td><td>원로: 이번 시험에서 채울 시수(필수). 그 밖의 구분: 적어 두면 이 시수를 넘기지 않도록 합니다(비우면 제한 없음).</td></tr>
-        <tr><td>이전 누적</td><td>지난 회차까지의 전체 시수. 2차부터 쓰며, 누적이 적은 선생님께 더 배정합니다. <b>이전 회차 결과 엑셀에서 누적 불러오기</b>로 한 번에 채울 수 있고, 이때 각 선생님이 들어갔던 교실 이력도 함께 보관됩니다.</td></tr>
-      </table>
-      <h3 id="s3-type">구분과 목표시수</h3>
-      <table>
-        <tr><th>구분</th><th>배정 방식</th></tr>
-        <tr><td>일반</td><td>모든 자리에 들어갈 수 있고, 누적 시수가 고르게 되도록 배정합니다.</td></tr>
-        <tr><td>고사담당</td><td>시험 운영 담당. <b>1교시에만</b> 배정하고 2교시부터는 빠집니다. 예비 명단에도 넣지 않습니다.</td></tr>
-        <tr><td>원로</td><td>교실 감독만 하고 복도·자습 감독은 하지 않습니다. 목표시수만큼 채우며, 하루 상한은 목표시수÷시험일수(올림)입니다.</td></tr>
-        <tr><td>순회</td><td>복도 감독과 자습 교실만 맡고, 시험 치르는 교실에는 들어가지 않습니다.</td></tr>
-        <tr><td>제외</td><td>출산·연수 등으로 이번 시험 감독에서 완전히 뺍니다. 명단에는 남아 시수표에 표시됩니다.</td></tr>
-      </table>
-      <h3 id="s3-excel">엑셀 양식과 불러오기</h3>
-      <ul>
-        <li><b>엑셀 파일 불러오기</b>는 첫 번째 시트를 읽습니다. 첫 줄에 머리글(이름, 과목, 담임, 교사구분(또는 구분), 목표시수, 누적)이 있으면 열 순서는 상관없습니다. 머리글이 없으면 <code>[연번,] 이름, 과목, 담임, 구분, 목표시수, 이전누적</code> 순서로 읽습니다.</li>
-        <li><b>붙여넣기</b>는 엑셀 표를 복사해 넣는 방식으로, 파일 형식과 상관없이 쓸 수 있습니다. 예전 형식(.xls) 파일은 이 방법을 쓰거나 .xlsx로 저장한 뒤 불러오세요.</li>
-        <li>명단 표 안에서도 엑셀처럼 여러 칸을 한 번에 붙여넣을 수 있습니다. 시작 칸을 클릭하고 <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
-        <li>이미 명단이 있을 때 불러오면 <b>뒤에 추가</b>할지 <b>새 명단으로 바꿀지</b> 묻습니다.</li>
-      </ul>
-
-      <h3 id="s4">특수실 · 예외 감독자 <span class="muted" style="font-weight:400">(3단계 오른쪽)</span></h3>
-      <h4 id="s4-special">특수실</h4>
-      <p>특수학급처럼 시험 기간 내내 한 선생님이 따로 자리를 지키는 곳입니다. 지정자는 일반 감독에서 빠지고 결과에 "특수(명칭)"으로 표시되며, 적어 둔 시수가 그 선생님의 이번 회차 시수에 더해져 시수표와 누적에 반영됩니다.</p>
-      <h4 id="s4-exceptions">일차·교시별 예외 감독자</h4>
-      <ul>
-        <li>출장·연가·수업 등으로 특정 교시에 감독할 수 없는 선생님을 일차별로 적습니다. <b>+ 추가</b>로 줄을 만들고 일차·교시를 고른 뒤 이름을 명단에서 선택합니다. 종일 자리를 비우면 교시를 <b>종일</b>로 고릅니다.</li>
-        <li>명단에 없는 이름은 빨갛게 표시되고 적용되지 않습니다. 이름 뒤 공백이나 오타가 흔한 원인입니다.</li>
-        <li>예외로 적힌 교시에는 감독뿐 아니라 예비 명단에서도 빠집니다. 사유는 결과_감독표의 비고 칸에 함께 적힙니다.</li>
-      </ul>
-
-      <h2 id="s5">4. 배정 결과</h2>
-      <ol>
-        <li><b>배정 전 점검</b>을 봅니다. 빨간 항목(명단 없음, 이름 중복 등)은 해결해야 배정할 수 있습니다. 노란 항목은 배정은 되지만 결과에 영향을 줄 수 있는 것(과목명 불일치, 교사 부족 가능성 등)이고, 참고 항목은 비어 있는 과목 칸 같은 안내입니다.</li>
-        <li><b>배정 시작</b>을 누르면 1~3초 뒤 결과가 나옵니다. 머리줄의 요약 칩에서 <b>부족</b>과 <b>위반</b>이 0인지 먼저 확인하세요(칩에 마우스를 올리면 뜻이 나옵니다).</li>
-        <li><b>감독표 / 개인별 시간표 / 시수표</b>를 번갈아 보며 검토합니다. 시수표의 <b>가능 교시</b>는 그 선생님이 이번 시험에서 들어갈 수 있는 교시 수로, 본인 과목 시험이 많거나 고사담당이면 적습니다. 이런 분이 적게 배정되는 것은 규칙 때문이지 오류가 아닙니다.</li>
-        <li>마음에 들지 않으면 <b>처음부터 새로 배정</b>(새 조합) 또는 칸을 직접 고칩니다.</li>
-        <li><b>엑셀로 저장</b>한 뒤, 다음 회차를 준비할 때 <b>누적 반영 → 다음 회차</b>를 누릅니다.</li>
+    { id: 's3', title: '3. 교사 명단', anchors: ['s3-type', 's3-excel'], html() {
+      const html = withDemo(() => captureTab('teachers'));
+      return `
+      <p class="lead">교사 명단을 엑셀에서 한 번에 넣고, 담임·구분·목표시수·이전 누적을 확인하는 화면입니다.</p>
+      ${shot(html, '.teachers-layout > .panel', [['[data-act="t-excel"]', 1], ['[data-act="t-paste"]', 2], ['[data-act="t-prev-import"]', 3], ['thead th:nth-child(3)', 4], ['thead th:nth-child(4)', 5], ['thead th:nth-child(5)', 6], ['thead th:nth-child(6)', 7], ['thead th:nth-child(7)', 8]], { title: '전체 교사 명단' })}
+      <ol class="co-list">
+        <li>${co(1)}<b>엑셀 불러오기</b> — 첫 번째 시트를 읽습니다. 첫 줄에 머리글(이름, 과목, 담임, 교사구분 또는 구분, 목표시수, 누적)이 있으면 열 순서는 상관없습니다. 이미 명단이 있으면 <b>뒤에 추가</b>할지 <b>새 명단으로 바꿀지</b> 묻습니다.</li>
+        <li>${co(2)}<b>붙여넣기</b> — 엑셀 표를 복사해 넣는 방식으로 파일 형식과 상관없이 쓸 수 있습니다. 예전 형식(.xls)은 이 방법을 쓰거나 .xlsx로 저장한 뒤 불러오세요. 표 안의 칸을 클릭하고 <kbd>Ctrl</kbd>+<kbd>V</kbd>로 여러 칸을 한 번에 넣을 수도 있습니다.</li>
+        <li>${co(3)}<b>이전 회차 결과 엑셀에서 누적 불러오기</b> — 지난 회차에 저장한 결과 엑셀을 열어 "이전 누적"을 한 번에 채우고, 각 선생님이 들어갔던 교실 이력도 함께 보관합니다. 2차부터 씁니다.</li>
+        <li>${co(4)}<b>과목</b> — 담당 과목. 여러 과목은 <code>/</code>로 구분합니다(예: <code>화학/윤리</code>). <b>본인 과목 시험 시간에는 감독에서 빠집니다.</b> <code>수학</code> 교사는 <code>수학Ⅰ</code>·<code>수학Ⅱ</code>·<code>수학(미적)</code> 시험과 같은 과목으로 봅니다. 표기가 달라 짝을 찾지 못하면 4단계 점검 목록에 표시됩니다.</li>
+        <li>${co(5)}<b>담임</b> — <code>2-5</code>처럼 학년-반. 부장은 <code>3-부장</code>. 담임은 본인 반 교실에 들어가지 않습니다. 담임이 아니면 비웁니다.</li>
+        <li>${co(6)}<b>구분</b> — 아래 표 참고. 같은 이름이 둘이면 이름 칸이 빨갛게 표시되니 <code>홍길동A</code>처럼 구분해 주세요.</li>
+        <li>${co(7)}<b>목표</b> — 원로: 이번 시험에서 채울 시수(필수). 그 밖의 구분: 적어 두면 이 시수를 넘기지 않도록 합니다(비우면 제한 없음).</li>
+        <li>${co(8)}<b>누적</b> — 지난 회차까지의 전체 시수. 2차부터 쓰며, 누적이 적은 선생님께 더 배정합니다. 1차 고사에서는 흐리게 보이고 쓰지 않습니다.</li>
       </ol>
-      <h3 id="s5-edit">결과 직접 수정</h3>
+      <h3 id="s3-type">구분과 배정 방식</h3>
+      ${kv([['일반', '모든 자리에 들어갈 수 있고, 누적 시수가 고르게 되도록 배정합니다.'], ['고사담당', '시험 운영 담당. <b>1교시에만</b> 배정하고 2교시부터는 빠집니다. 예비 명단에도 넣지 않습니다.'], ['원로', '교실 감독만 하고 복도·자습 감독은 하지 않습니다. 목표시수만큼 채우며, 하루 상한은 목표시수÷시험일수(올림)입니다.'], ['순회', '복도 감독과 자습 교실만 맡고, 시험 치르는 교실에는 들어가지 않습니다.'], ['제외', '출산·연수 등으로 이번 시험 감독에서 완전히 뺍니다. 명단에는 남아 시수표에 표시됩니다.']], ['구분', '배정 방식'])}
+      <h3 id="s3-excel">엑셀 양식</h3>
+      <p>머리글이 없으면 <code>[연번,] 이름, 과목, 담임, 구분, 목표시수, 이전누적</code> 순서로 읽습니다. 예:</p>
+      ${kv([['김지연', '국어', '1-1', '일반', '', '6'], ['박서준', '수학', '', '고사담당', '', '4'], ['정하은', '영어', '3-부장', '원로', '4', '5']], ['이름', '과목', '담임', '구분', '목표시수', '누적'])}`;
+    } },
+
+    { id: 's4', title: '3. 특수실 · 예외', anchors: ['s4-special', 's4-exceptions'], html() {
+      const html = withDemo(() => captureTab('teachers'));
+      return `
+      <p class="lead">3단계 오른쪽에는 시험 기간 내내 따로 자리를 지키는 <b>특수실</b>과, 특정 교시에 감독할 수 없는 <b>예외 감독자</b>를 적습니다. 없으면 비워 둡니다.</p>
+      ${shot(html, '.side-grid', [['[data-act="sp-add"]', 1], ['[data-bind="specials.0.teacher"]', 2], ['[data-bind="specials.0.hours"]', 3], ['[data-act="ex-add"]', 4], ['[data-exmove="0,0"]', 5], ['[data-bind="days.0.exceptions.0.period"]', 6], ['[data-bind="days.0.exceptions.0.name"]', 7]], { cls: 'side' })}
+      <h3 id="s4-special">특수실</h3>
+      <ol class="co-list">
+        <li>${co(1)}<b>+ 추가</b> — 특수학급처럼 한 선생님이 시험 기간 내내 따로 자리를 지키는 곳을 한 줄씩 적습니다.</li>
+        <li>${co(2)}<b>지정자</b> — 명단에서 고릅니다. 지정자는 일반 감독에서 빠지고 결과에 "특수(명칭)"으로 표시됩니다.</li>
+        <li>${co(3)}<b>시수</b> — 적어 둔 시수가 그 선생님의 이번 회차 시수에 더해져 시수표와 누적에 반영됩니다.</li>
+      </ol>
+      <h3 id="s4-exceptions">일차·교시별 예외 감독자</h3>
+      <ol class="co-list">
+        <li>${co(4)}<b>+ 추가</b> — 출장·연가·수업 등으로 특정 교시에 감독할 수 없는 선생님을 한 줄씩 적습니다.</li>
+        <li>${co(5)}<b>일차</b> — 어느 날인지 고릅니다. 바꾸면 그 날의 줄로 옮겨집니다.</li>
+        <li>${co(6)}<b>교시</b> — 종일 자리를 비우면 <b>종일</b>을 고릅니다.</li>
+        <li>${co(7)}<b>이름</b> — 명단에서 선택합니다. 명단에 없는 이름은 빨갛게 표시되고 적용되지 않습니다(이름 뒤 공백이나 오타가 흔한 원인).</li>
+      </ol>
+      <div class="note">예외로 적힌 교시에는 감독뿐 아니라 예비 명단에서도 빠집니다. 사유는 결과_감독표의 비고 칸에 함께 적힙니다.</div>`;
+    } },
+
+    { id: 's5', title: '4. 배정 결과', anchors: [], html() {
+      const html = withDemo(() => captureTab('result'), 'grid');
+      const person = withDemo(() => captureTab('result'), 'person');
+      return `
+      <p class="lead">배정을 실행하고 결과를 세 가지 표로 검토한 뒤 엑셀로 저장하는 화면입니다. 처음에는 <b>배정 시작</b> 버튼 하나만 보이고, 배정이 끝나면 아래처럼 바뀝니다.</p>
+      ${shot(html, '.panel', [['details.issue-group > summary', 1], ['.kpis', 2], ['[data-act="clear-result"]', 3], ['[data-act="apply-cum"]', 4], ['[data-act="rerun"]', 5], ['[data-act="run"]', 6], ['[data-act="export"]', 7], ['.seg', 8], ['td.slot.corr', 9], ['td.subjcol.study', 10]], { title: '배정 후 · 감독표' })}
+      <ol class="co-list">
+        <li>${co(1)}<b>배정 전 점검</b> — 빨간 항목(명단 없음, 이름 중복 등)은 해결해야 배정할 수 있습니다. 노란 항목은 배정은 되지만 결과에 영향을 줄 수 있는 것(과목명 불일치, 교사 부족 가능성 등), 참고 항목은 비어 있는 과목 칸 같은 안내입니다.</li>
+        <li>${co(2)}<b>요약 칩</b> — <b>부족</b>(감독 부족 자리)과 <b>위반</b>(규칙 위반 칸)이 0인지 먼저 확인합니다. 누적 범위·평균은 일반 교사 기준이고, 📌는 직접 고친 칸 수입니다. 마우스를 올리면 뜻이 나옵니다.</li>
+        <li>${co(3)}<b>결과 지우기</b> — 결과를 버리고 배정 전으로 돌아갑니다.</li>
+        <li>${co(4)}<b>누적 반영 → 다음 회차</b> — 이번 결과의 시수를 "이전 누적"에 더하고 교실 이력을 보관한 뒤 회차를 하나 올립니다. 엑셀로 저장한 뒤에 누르세요.</li>
+        <li>${co(5)}<b>다시 돌리기 (📌 유지)</b> — 직접 고쳐 고정한 칸은 그대로 두고 나머지만 다시 고르게 맞춥니다.</li>
+        <li>${co(6)}<b>처음부터 새로 배정</b> — 고정한 칸까지 버리고 새 조합을 만듭니다.</li>
+        <li>${co(7)}<b>엑셀로 저장</b> — 감독표·시수표·개인별시간표 세 시트가 든 파일을 받습니다(다음 장).</li>
+        <li>${co(8)}<b>감독표 / 개인별 시간표 / 시수표</b> — 같은 결과를 세 가지로 봅니다. 감독표는 교시·학년별 교실 배치(게시용), 개인별 시간표는 선생님별 교시 배치, 시수표는 선생님별 합계입니다.</li>
+        <li>${co(9)}<b>칸 색</b> — ${swatch('#fff4c2')}자습 ${swatch('#ece8fb')}복도 ${swatch('#dbeafe')}본인 시험 ${swatch('#fce7f3')}예비 ${swatch('#fef2f2')}부족. ⚠는 규칙 위반(마우스를 올리면 이유), 📌는 직접 고친 칸입니다.</li>
+        <li>${co(10)}<b>과목 칸</b> — 노란색은 자습(전체 또는 일부 반). 오른쪽 끝 <b>예비</b>는 그 교시에 비어 있는 선생님을 누적이 적은 순으로 보여 줍니다.</li>
+      </ol>
+      ${shot(person, '.result-table-panel', [['table.res thead th.subj', 1], ['td.slot.own', 2], ['table.res tbody tr:first-child td:last-child', 3]], { title: '개인별 시간표' })}
+      <ol class="co-list">
+        <li>${co(1)}머리글에 그 교시의 학년별 과목이 보입니다.</li>
+        <li>${co(2)}파란 칸은 본인 과목 시험이라 감독에서 빠진 교시입니다. 비어 있는 칸을 누르면 그 선생님을 그 교시의 어느 자리에 넣을지 고를 수 있습니다.</li>
+        <li>${co(3)}오른쪽 끝은 교실·복도·자습·특수 시수, 이번 합계, 전체 누적입니다. 시수표의 <b>가능 교시</b>는 그 선생님이 이번 시험에서 들어갈 수 있는 교시 수로, 본인 과목 시험이 많거나 고사담당이면 적습니다. 이런 분이 적게 배정되는 것은 규칙 때문이지 오류가 아닙니다.</li>
+      </ol>`;
+    } },
+
+    { id: 's5-edit', title: '결과 직접 수정', anchors: [], html() {
+      const html = withDemo(() => {
+        const model = currentModel();
+        const ev = E.evaluate(model, state.result.assign);
+        const slot = model.slots.find((x) => x.kind === 'class' && x.pi === 1 && state.result.assign[x.id]);
+        const per = model.periods[slot.pi];
+        const gi = per.grades[slot.grade - 1];
+        return `<div class="modal" style="width:auto;max-height:none;box-shadow:none;border:1px solid var(--line)"><div class="modal-head"><h3>감독 바꾸기</h3></div><div class="modal-body"><p>${per.dayLabel} ${esc(per.date)} ${per.p}교시 · <b>${slot.grade}학년 ${slot.classNo}반</b> · ${esc(gi.label)}<br>현재: <b>${esc(state.result.assign[slot.id])}</b></p>${candidateHTML(model, ev, slot)}</div><div class="modal-foot"><button class="btn danger">비우기</button><button class="btn">취소</button></div></div>`;
+      });
+      return `
+      <p class="lead">감독표나 개인별 시간표에서 <b>칸을 누르면</b> 아래 창이 열립니다. 누적이 적은 순으로 후보가 나오고, 같은 교시의 다른 자리와 맞바꿀 수도 있습니다.</p>
+      ${shot(html, null, [['.cand-search', 1], ['div.cand-group:nth-of-type(2) h4', 2], ['div.cand-group:nth-of-type(3) h4', 3], ['details.cand-group summary', 4], ['.cand.free', 5]], { title: '감독 바꾸기 창' })}
+      <ol class="co-list">
+        <li>${co(1)}<b>이름 검색</b> — 후보가 많을 때 이름 일부로 거릅니다.</li>
+        <li>${co(2)}<b>바로 넣을 수 있는 선생님</b> — 그 교시에 비어 있고 규칙에 맞는 분. 괄호 안은 누적 시수입니다. 누르면 바로 바뀝니다.</li>
+        <li>${co(3)}<b>같은 교시 다른 자리와 맞바꾸기</b> — 그 교시에 이미 다른 자리에 들어간 분과 자리를 바꿉니다. ⚠가 붙으면 바꾼 뒤 상대 자리에서 규칙에 걸린다는 뜻입니다.</li>
+        <li>${co(4)}<b>규칙상 어려운 선생님</b> — 이유(본인 시험, 담임 반, 예외 등)가 함께 보이며, 그래도 넣을 수는 있습니다. 넣으면 그 칸에 ⚠가 표시되고 저장은 막지 않습니다.</li>
+        <li>${co(5)}후보 옆의 작은 글씨는 누적 시수와 그날 들어가는 교시 수입니다.</li>
+      </ol>
       <ul>
-        <li>감독표나 개인별 시간표의 칸을 누르면 <b>바로 넣을 수 있는 선생님</b>(누적 적은 순), <b>같은 교시 다른 자리와 맞바꾸기</b>, <b>규칙상 어려운 선생님</b>(이유 표시, 확인 후 넣을 수 있음) 목록이 나옵니다. 이름으로 검색할 수 있습니다.</li>
-        <li>개인별 시간표에서 비어 있는 칸을 누르면 그 선생님을 그 교시의 어느 자리에 넣을지 고를 수 있습니다.</li>
         <li>직접 고친 칸은 📌로 고정됩니다. <b>다시 돌리기 (📌 유지)</b>는 고정한 칸은 그대로 두고 나머지만 다시 고르게 맞춥니다. <b>고정 모두 풀기</b>로 해제할 수 있습니다.</li>
-        <li>규칙에 어긋나게 고치면 그 칸에 ⚠가 표시되고 마우스를 올리면 이유가 보입니다. 저장은 막지 않습니다.</li>
         <li>배정 후 입력(과목·교사·예외)을 바꾸면 결과 위에 "입력이 바뀜" 안내가 뜹니다. 바뀐 입력으로 결과를 다시 검사해 보여 주며, 다시 돌리기로 반영합니다.</li>
+      </ul>`;
+    } },
+
+    { id: 's5-excel', title: '엑셀 저장과 다음 회차', anchors: [], html() {
+      return `
+      <p class="lead"><b>엑셀로 저장</b>을 누르면 시트 세 개가 든 파일 하나를 받습니다. 게시용·보관용으로 쓰고, 다음 회차에서 누적을 불러올 때도 이 파일을 씁니다.</p>
+      ${kv([['결과_감독표', '일차·교시·학년별로 1반~N반, 추가반, 복도 감독 이름. 자습 칸은 노란색, 부족 칸은 빨간색, 비고에 특수실과 예외 사유. <b>게시용</b>입니다.'], ['결과_시수표', '교사별 교실·복도·자습·특수실 시수, 이번 합계, 이전 누적, 전체 누적. <b>다음 회차에서 누적을 불러올 때 이 시트를 읽습니다.</b>'], ['결과_개인별시간표', '교사별 교시 배정(예: 2-3, 1-복도1, 3-과학실, (자습) 표시). 본인 시험 교시는 파란색, 아래에 교시별 예비 명단(분홍). 통계 열은 엑셀 수식이라 손으로 고쳐도 다시 계산되고, 복도·자습 색도 따라갑니다. 다음 회차의 교실 이력은 이 시트에서 읽습니다.']], ['시트', '내용'])}
+      <div class="note">엑셀에서 긴 이름(예: 특수(지능형과학실))은 셀 크기에 맞춰 글자가 줄어들도록 저장됩니다. 머리글의 과목명은 줄바꿈으로 전부 보입니다.</div>
+      <h3>다음 회차로 넘어가기</h3>
+      <ol class="steps-list">
+        <li>결과를 검토하고 <b>엑셀로 저장</b>합니다.</li>
+        <li><b>누적 반영 → 다음 회차</b>를 누릅니다. 이번 시수가 "이전 누적"에 더해지고, 들어갔던 교실이 이력으로 보관되며, 회차가 하나 올라갑니다. 결과는 비워집니다.</li>
+        <li>다음 시험 때 2단계 과목과 일차, 3단계 예외만 새로 고치고 배정합니다.</li>
+      </ol>
+      <p>누적 반영을 누르지 않았거나 다른 컴퓨터에서 이어서 할 때는, 3단계의 <b>이전 회차 결과 엑셀에서 누적 불러오기</b>로 지난 엑셀 파일을 읽으면 같은 결과가 됩니다.</p>
+      <h3>저장이 안 될 때</h3>
+      <p>브라우저가 다운로드를 막았는지 주소창 오른쪽의 아이콘을 확인하세요. 파일 이름의 한글이 깨지면 브라우저 설정의 언어가 한국어인지 확인합니다.</p>`;
+    } },
+
+    { id: 'rules', title: '배정 규칙과 원리', anchors: [], html() {
+      return `
+      <h3>반드시 지키는 규칙</h3>
+      <ul class="two-col">
+        <li>같은 교시에 한 자리</li><li>본인 과목 시험 시간 제외</li><li>담임은 본인 반 교실 제외</li><li>예외 감독자 제외</li><li>특수실 지정자 제외</li><li>하루 3교시 연속 금지</li><li>고사담당은 1교시만</li><li>순회는 시험 교실 제외</li><li>원로는 복도·자습 제외, 목표시수와 하루 상한 준수</li><li>제외 교사와 (4차) 3학년 담임·부장 제외</li><li>(옵션) 같은 교실 두 번 금지</li>
       </ul>
-      <h3 id="s5-excel">엑셀 파일 구성</h3>
-      <table>
-        <tr><th>시트</th><th>내용</th></tr>
-        <tr><td>결과_감독표</td><td>일차·교시·학년별로 1반~N반, 추가반, 복도 감독 이름. 자습 칸은 노란색, 비고에 특수실과 예외 사유. 게시용입니다.</td></tr>
-        <tr><td>결과_시수표</td><td>교사별 교실·복도·자습·특수실 시수, 이번 합계, 이전 누적, 전체 누적. <b>다음 회차에서 누적을 불러올 때 이 시트를 읽습니다.</b></td></tr>
-        <tr><td>결과_개인별시간표</td><td>교사별 교시 배정(예: 2-3, 1-복도1, 3-음악실, (자습) 표시), 본인 시험 교시는 파란색, 아래에 교시별 예비 명단(분홍). 통계 열은 엑셀 수식이라 손으로 고쳐도 다시 계산됩니다. 다음 회차의 교실 이력은 이 시트에서 읽습니다.</td></tr>
-      </table>
+      <h3>고르게 맞추는 순서</h3>
+      <ol class="steps-list">
+        <li>감독 부족 없음</li><li>목표시수 초과 없음</li><li>원로 목표 채우기</li><li>일반 교사 전체 누적 시수 차이 최소</li><li>복도·자습 / 교실 시수 차이</li><li>하루에 몰리지 않게</li><li>연속 교시 줄이기</li><li>같은 교실 반복 줄이기</li>
+      </ol>
+      <p>초안을 만든 뒤 수십만 번 감독을 바꾸거나 맞바꿔 보며 점수가 좋아지는 쪽으로 다듬습니다(담금질 기법). 가상 학교 자료로 검증했을 때 결과는 이론상 가장 고른 분배와 같거나 1시간 차이였으며, 남는 차이는 규칙(본인 시험이 많은 과목, 고사담당 1교시 제한 등) 때문입니다.</p>`;
+    } },
 
-      <h2 id="rules">배정 규칙과 원리</h2>
-      <p><b>반드시 지키는 규칙</b>: 같은 교시에 한 자리 · 본인 과목 시험 시간 제외 · 담임은 본인 반 교실 제외 · 예외 감독자 제외 · 특수실 지정자 제외 · 하루 3교시 연속 금지 · 고사담당은 1교시만 · 순회는 시험 교실 제외 · 원로는 복도·자습 제외, 목표시수와 하루 상한 준수 · 제외 교사와 (4차) 3학년 담임·부장 제외 · (옵션) 같은 교실 두 번 금지.</p>
-      <p><b>고르게 맞추는 순서</b>: 감독 부족 없음 → 목표시수 초과 없음 → 원로 목표 채우기 → 일반 교사 전체 누적 시수 차이 최소 → 복도·자습 / 교실 시수 차이 → 하루에 몰리지 않게 → 연속 교시 줄이기 → 같은 교실 반복 줄이기.</p>
-      <p>초안을 만든 뒤 수십만 번 감독을 바꾸거나 맞바꿔 보며 점수가 좋아지는 쪽으로 다듬습니다(담금질 기법). 가상 학교 자료로 검증했을 때 결과는 이론상 가장 고른 분배와 같거나 1시간 차이였으며, 남는 차이는 규칙(본인 시험이 많은 과목, 고사담당 1교시 제한 등) 때문입니다.</p>
+    { id: 'faq', title: '자주 묻는 질문', anchors: [], html() {
+      const qa = (q, a) => `<details class="faq" open><summary>${q}</summary><p>${a}</p></details>`;
+      return `
+      ${qa('부족 자리가 생깁니다.', '그 교시에 들어갈 수 있는 교사가 자리보다 적은 것입니다. 점검 목록에 "필요한 감독 N명 > 가능한 교사 M명"으로 미리 표시됩니다. 복도 감독 수를 줄이거나, 전체 자습 교시의 교실 감독을 끄거나, 그 교시의 예외를 줄이거나, 고사담당·순회 구분을 조정해 보세요.')}
+      ${qa('어떤 선생님만 시수가 적습니다.', '시수표의 "가능 교시"를 보세요. 본인 과목 시험이 여러 교시에 있거나(국·영·수), 고사담당이거나, 예외가 많으면 들어갈 수 있는 교시 자체가 적습니다. 과목명이 시험 과목과 다르게 적혀 있어도(예: 교사 "물리" ↔ 시험 "물리학Ⅰ") 점검 목록에 표시됩니다.')}
+      ${qa('4차 고사에서 3학년 담임은 어떻게 되나요?', '"3학년 담임·부장 제외"가 켜져 있으면 배정에서 빠집니다. 이분들의 시수는 3차까지의 누적을 기준으로 보며, 연말 합계로 비교하지 않습니다. 4차에도 1·2학년 감독을 맡기려면 옵션을 끄세요.')}
+      ${qa('"같은 교실 두 번 금지"를 켜면 자리가 모자라지 않나요?', '아닙니다. 한 선생님이 한 시험에 교실 3~4번 들어가고 교실은 20개가 넘어 여유가 큽니다. 1년 내내 금지해도 부족 자리가 생기지 않는 것을 확인했습니다.')}
+      ${qa('두 과목이 같은 교시에 치러지면 추가반을 둘 두어야 하나요?', '아닙니다. 두 과목이 동시에 치러져도 교실은 반마다 하나이고 추가반도 하나면 됩니다. <b>+과목</b>으로 두 과목을 적어 두면 두 과목 교사 모두 그 시간 감독에서 빠집니다.')}
+      ${qa('예전 프로그램의 백업 파일을 그대로 쓸 수 있나요?', '네. 백업 불러오기로 열면 반 수·일차·과목(자습·제외 버튼 포함)·교사·특수실·예외가 변환됩니다. 과목명 뒤의 <code>*(장소)</code>는 추가반 버튼으로 바뀝니다.')}
+      ${qa('엑셀 저장이 되지 않습니다.', '브라우저가 다운로드를 막았는지 주소창 오른쪽의 아이콘을 확인하세요. 파일 이름에 한글이 깨지면 브라우저 설정의 언어가 한국어인지 확인합니다.')}
+      ${qa('두 사람이 같은 컴퓨터를 쓰면?', '브라우저 사용자(프로필)가 다르면 자료가 따로 저장됩니다. 같은 프로필이면 하나의 자료를 공유하니 백업 파일로 각자 보관하세요.')}`;
+    } },
+  ];
 
-      <h2 id="faq">자주 묻는 질문</h2>
-      <p><b>부족 자리가 생깁니다.</b> 그 교시에 들어갈 수 있는 교사가 자리보다 적은 것입니다. 점검 목록에 "필요한 감독 N명 > 가능한 교사 M명"으로 미리 표시됩니다. 복도 감독 수를 줄이거나, 전체 자습 교시의 교실 감독을 끄거나, 그 교시의 예외를 줄이거나, 고사담당·순회 구분을 조정해 보세요.</p>
-      <p><b>어떤 선생님만 시수가 적습니다.</b> 시수표의 "가능 교시"를 보세요. 본인 과목 시험이 여러 교시에 있거나(국·영·수), 고사담당이거나, 예외가 많으면 들어갈 수 있는 교시 자체가 적습니다. 과목명이 시험 과목과 다르게 적혀 있어도(예: 교사 "물리" ↔ 시험 "물리학Ⅰ") 점검 목록에 표시됩니다.</p>
-      <p><b>4차 고사에서 3학년 담임은 어떻게 되나요?</b> "3학년 담임·부장 제외"가 켜져 있으면 배정에서 빠집니다. 이분들의 시수는 3차까지의 누적을 기준으로 보며, 연말 합계로 비교하지 않습니다. 4차에도 1·2학년 감독을 맡기려면 옵션을 끄세요.</p>
-      <p><b>"같은 교실 두 번 금지"를 켜면 자리가 모자라지 않나요?</b> 아닙니다. 한 선생님이 한 시험에 교실 3~4번 들어가고 교실은 20개가 넘어 여유가 큽니다. 1년 내내 금지해도 부족 자리가 생기지 않는 것을 확인했습니다.</p>
-      <p><b>예전 프로그램의 백업 파일을 그대로 쓸 수 있나요?</b> 네. 백업 불러오기로 열면 반 수·일차·과목(자습·제외 버튼 포함)·교사·특수실·예외가 변환됩니다. 과목명 뒤의 <code>*(장소)</code>는 추가반 버튼으로 바뀝니다.</p>
-      <p><b>엑셀 저장이 되지 않습니다.</b> 브라우저가 다운로드를 막았는지 주소창 오른쪽의 아이콘을 확인하세요. 파일 이름에 한글이 깨지면 브라우저 설정의 언어가 한국어인지 확인합니다.</p>
-      <p><b>두 사람이 같은 컴퓨터를 쓰면?</b> 브라우저 사용자(프로필)가 다르면 자료가 따로 저장됩니다. 같은 프로필이면 하나의 자료를 공유하니 백업 파일로 각자 보관하세요.</p>
-    </div></div>`;
+  function helpChapterIndex(topic) {
+    if (!topic) return 0;
+    let i = HELP_CHAPTERS.findIndex((c) => c.id === topic);
+    if (i < 0) i = HELP_CHAPTERS.findIndex((c) => c.anchors.includes(topic));
+    return Math.max(0, i);
   }
 
   function showHelp(topic) {
+    const N = HELP_CHAPTERS.length;
+    let cur = helpChapterIndex(topic);
+    const cache = {};
+    const tocHTML = () => HELP_CHAPTERS.map((c, i) => `<a href="#" data-ch="${i}" class="${i === cur ? 'active' : ''}"><span class="toc-no">${i + 1}</span>${esc(c.title)}</a>`).join('');
+    const navHTML = () => `<div class="help-nav">
+      <button class="btn" data-nav="-1" ${cur === 0 ? 'disabled' : ''}>← 이전</button>
+      <span class="muted small">${cur + 1} / ${N}${cur + 1 < N ? ` · 다음: ${esc(HELP_CHAPTERS[cur + 1].title)}` : ''}</span>
+      <span class="spacer"></span>
+      ${cur + 1 < N ? `<button class="btn ghost" data-close>닫기</button><button class="btn primary" data-nav="1">다음 →</button>` : `<button class="btn ghost" data-ch="0">처음으로</button><button class="btn primary" data-close>닫기</button>`}
+    </div>`;
     dialog({
-      title: '사용 설명서', xwide: true, html: helpHTML(),
+      title: '사용 설명서', xwide: true, html: `<div class="help-layout"><nav class="help-toc">${tocHTML()}</nav><div class="help"><div class="help-chapter"></div></div></div>`,
       onOpen(back) {
+        back.querySelector('.modal').classList.add('help-modal');
         const body = $('.modal-body', back);
-        const go = (id) => { const el = $('#' + id, back); if (el) body.scrollTop = el.offsetTop - body.offsetTop - 6; };
-        back.addEventListener('click', (e) => { const a = e.target.closest('.help-toc a'); if (a) { e.preventDefault(); go(a.getAttribute('href').slice(1)); } });
-        if (topic) setTimeout(() => go(topic), 0);
+        $('.modal-foot', back).innerHTML = navHTML();
+        const render = (anchor) => {
+          const c = HELP_CHAPTERS[cur];
+          if (!cache[cur]) cache[cur] = `<h2 id="${c.id}">${esc(c.title)}</h2>${c.html()}`;
+          $('.help-chapter', back).innerHTML = cache[cur];
+          $('.help-toc', back).innerHTML = tocHTML();
+          $('.modal-foot', back).innerHTML = navHTML();
+          body.scrollTop = 0;
+          if (anchor && anchor !== c.id) { const el = $('#' + anchor, back); if (el) body.scrollTop = el.offsetTop - body.offsetTop - 6; }
+        };
+        back.addEventListener('click', (e) => {
+          const a = e.target.closest('[data-ch]');
+          if (a) { e.preventDefault(); cur = +a.dataset.ch; render(); return; }
+          const b = e.target.closest('[data-nav]');
+          if (b) { cur = Math.max(0, Math.min(N - 1, cur + (+b.dataset.nav))); render(); }
+        });
+        back.addEventListener('keydown', (e) => {
+          if (e.target.tagName === 'INPUT') return;
+          if (e.key === 'ArrowRight' && cur + 1 < N) { cur++; render(); }
+          if (e.key === 'ArrowLeft' && cur > 0) { cur--; render(); }
+        });
+        back.tabIndex = -1;
+        render(topic);
+        back.focus();
       },
     });
   }
