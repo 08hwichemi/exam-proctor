@@ -5,7 +5,7 @@
 ## 지금 상태
 
 - 파이썬(PyQt) 시험 감독 배정 프로그램(`main.py`)을 **서버 없는 웹앱**으로 옮겨 `main` 브랜치에 병합 완료. GitHub Pages 주소: `https://08hwichemi.github.io/exam-proctor/` (Pages 설정은 저장소 Settings → Pages에서 `main` / root).
-- PR #1~#7 병합 완료. 이후 작업 브랜치 `claude/beautiful-lamport-g36no8`(PR #8: 교사 탭 창 높이 맞춤, 결과 요약 칩 / PR #9: 설명서 챕터형 개편, 요약 칩 확대, 엑셀 셀 맞춤 / PR #10: 복도·자습 각각 균형).
+- PR #1~#7 병합 완료. 이후 작업 브랜치 `claude/beautiful-lamport-g36no8`(PR #8: 교사 탭 창 높이 맞춤, 결과 요약 칩 / PR #9: 설명서 챕터형 개편, 요약 칩 확대, 엑셀 셀 맞춤 / PR #10: 복도·자습 각각 균형 / PR #11: Supabase 접속 암호).
 - 암호(라이선스 키)는 제거. `keygen.py`, `main.py`는 참고용으로만 남아 있음(비밀 단어가 공개 저장소에 노출되어 있으니 파이썬 버전을 계속 배포한다면 바꿔야 함).
 
 ## 파일 구성
@@ -17,6 +17,9 @@
 | `js/engine.js` | 배정 엔진. 입력 해석(`parseCell`, `parseHomeroom`), 모델(`buildModel`), 최적화(`createOptimizer`: 그리디 초안 + 담금질), 검사(`evaluate`), 서명(`inputSignature`). Node에서도 로드됨 |
 | `js/excel.js` | ExcelJS로 교사 명단·이전 결과 읽기, 결과 3개 시트 쓰기(`exportResult`) |
 | `js/app.js` | 화면 전부. 상태(`state`), 자동 저장(localStorage `examProctor.v2`), 백업 파일, 예전 DATA SAVE 변환(`fromLegacy`), 4개 탭 렌더러, 결과 수정 모달, 설명서(`HELP_CHAPTERS`: 챕터별 넘김, `demoState`·`withDemo`·`captureTab`·`shot`으로 실제 렌더러를 보기 자료로 돌려 미리보기와 빨간 번호표를 그림) |
+| `js/config.js` | 접속 암호 확인용 Supabase 주소·anon key(공개용). `url`을 비우면 암호 화면 없이 열림(로컬 테스트) |
+| `js/auth.js` | `ProctorAuth`: fetch만으로 Supabase RPC 호출(`proctor_check`, `proctor_status`), 스마트보드 관리자 로그인 후 `proctor_set_password`. 라이브러리 없음 |
+| `docs/supabase-access.sql` | 스마트보드 프로젝트(`pqreeimkjnphupqqwiqo`)에 적용한 표·함수 원본. 다시 적용해도 안전(if not exists / or replace) |
 | `vendor/exceljs.min.js` | ExcelJS 4.4.0 동봉(학교망 CDN 차단 대비). 글꼴(Pretendard)만 CDN이며 막히면 시스템 글꼴로 대체 |
 | `tests/engine.test.js` | 엔진 단위·통합 테스트 + 예전 파이썬 방식(500회 몬테카를로) 이식본과 비교 |
 | `tests/verify.js` | 검증 리포트: 하한선 비교, 1~4차 연간 시뮬레이션, 같은 교실 금지 영향 |
@@ -51,6 +54,15 @@ cell = { name, study: [반], exclude: [반], special, room, multi }
 - 엑셀: 감독표·개인별시간표 본문의 이름 칸은 `shrinkToFit`(셀에 맞춤), 머리글 과목·과목 열·비고는 줄바꿈 유지.
 - 전역 `word-break: keep-all`로 한글 단어 중간 줄바꿈("1차고/사") 방지.
 - 추가반은 교시·학년당 하나(두 과목이 동시에 치러져도 교실은 하나만 추가). 과목별 추가반은 사용자가 필요 없다고 확인함(2026-10-04).
+
+## 접속 암호 (PR #11)
+
+- 페이지를 열면 `#gate`(index.html)가 먼저 보이고, 암호가 맞아야 `startApp()`이 앱을 그림. 매번 묻고 기억하지 않음(사용자 요구).
+- 암호 비교는 스마트보드 Supabase 프로젝트의 `proctor_check()` 함수 안에서(bcrypt). 해시 표 `proctor_config`는 RLS 켜고 정책 없음 + anon/authenticated 권한 회수라 API로 읽을 수 없음. 틀린 시도 10분 30회 제한(`proctor_attempts`).
+- 암호 바꾸기 두 가지: ① 암호 화면의 "접속 암호 바꾸기 (관리자)" → 스마트보드 관리자 이름·비밀번호로 Supabase Auth 로그인(`이름@smartboard.local`) 후 `proctor_set_password` 호출(함수 안에서 `assert_admin()` 검사). ② 대시보드 SQL Editor에서 `select proctor_set_password('새 암호');` (postgres 역할은 관리자 검사 생략).
+- 이 서버를 고른 이유: 무료 요금제는 7일 미사용 시 일시정지되므로 연중 쓰이는 프로젝트여야 함. 다른 프로젝트(SmartInterview, moving-class, 08hwichemi3's Project)는 계절성.
+- 이 작업 환경의 프록시가 `*.supabase.co`를 막아 브라우저·curl로 실제 호출은 못 해 봤음. 함수는 SQL로 검증(맞음/틀림/null), 화면은 Playwright에서 RPC 응답을 가짜로 넣어 검증. 실제 접속 확인은 사용자가 배포 후 해야 함.
+- 소스가 공개 저장소에 있으므로 이 암호는 "링크로 들어오는 사람 막기" 수준. 저장소를 내려받아 로컬에서 열면 `config.js`를 비워 쓸 수 있음(사용자가 인지하고 선택).
 
 ## 검증 방법
 

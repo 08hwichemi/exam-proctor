@@ -1115,7 +1115,7 @@
 
   // 챕터 정의. anchors: 각 화면의 ? 버튼이 가리키는 세부 주제
   const HELP_CHAPTERS = [
-    { id: 's0', title: '시작하기', anchors: ['s0-backup'], html() {
+    { id: 's0', title: '시작하기', anchors: ['s0-access', 's0-backup'], html() {
       const steps = `<nav class="stepper">${STEPS.map((st, i) => `<button class="step ${i === 0 ? 'active' : i < 3 ? 'done' : ''}"><span class="step-no">${i + 1}</span><span class="step-txt"><b>${st.title}</b><small>${['2차 고사 · 2일 6교시 · 7/7/7반', '18칸 중 17칸 입력', '48명 · 특수실 1 · 예외 2', '배정 준비됨'][i]}</small></span></button>`).join('')}</nav>`;
       const top = $('.topbar').outerHTML;
       return `
@@ -1129,6 +1129,13 @@
         <li>${co(5)}<b>단계 버튼</b> — 1 → 4 순서로 진행합니다. 누르면 그 단계로 이동하고, 각 단계 위 "할 일" 줄의 <b>다음</b> 버튼으로도 넘어갑니다.</li>
         <li>${co(6)}<b>입력 상태</b> — 단계마다 지금 입력된 내용이 요약되어 보입니다. 빨간 글씨는 해결할 문제가 있다는 뜻입니다.</li>
       </ol>
+      <h3 id="s0-access">접속 암호</h3>
+      <ul>
+        <li>주소를 열면 먼저 <b>접속 암호</b>를 묻습니다. 학교에서 안내받은 암호를 넣어야 앱이 나타나며, 새로고침하거나 다시 열 때마다 다시 묻습니다(기억하지 않음).</li>
+        <li>암호는 스마트보드가 쓰는 Supabase 서버에만 저장되어 있고, 이 페이지나 코드 어디에도 들어 있지 않습니다. 10분에 30번 넘게 틀리면 잠시 입력이 막힙니다.</li>
+        <li><b>암호 바꾸기</b>: 암호 화면 아래의 <b>접속 암호 바꾸기 (관리자)</b>를 누르고 스마트보드 관리자 이름·비밀번호와 새 접속 암호(8자 이상)를 넣습니다. 바꾸는 즉시 모든 선생님은 새 암호로만 들어올 수 있습니다. Supabase 대시보드 → SQL Editor에서 <code>select proctor_set_password('새 암호');</code>를 실행해도 됩니다.</li>
+        <li>"서버에 연결할 수 없습니다"가 뜨면 인터넷 연결이나 학교망에서 <code>supabase.co</code> 차단 여부를 확인하세요. "서버가 일시정지"가 뜨면 Supabase 대시보드에서 스마트보드 프로젝트를 다시 켜면 됩니다.</li>
+      </ul>
       <h3 id="s0-backup">자료는 어디에 저장되나요</h3>
       <ul>
         <li>입력하는 즉시 <b>이 컴퓨터의 이 브라우저</b>에 자동 저장됩니다. 같은 컴퓨터·같은 브라우저로 다시 열면 그대로 이어집니다.</li>
@@ -1664,12 +1671,92 @@
     if (e.key === LS_KEY && e.newValue) { state = normalizeState(JSON.parse(e.newValue)); renderAll(); toast('다른 창에서 바뀐 내용을 불러왔습니다.'); }
   });
 
+  // ---------------------------------------------------------------
+  // 접속 암호 화면 (js/auth.js). 암호가 맞아야 앱을 그림. 매번 묻고 기억하지 않음
+  // ---------------------------------------------------------------
+  const A = window.ProctorAuth;
+
+  function gateMessage(msg, info) {
+    const el = $('#gateMsg');
+    el.textContent = msg || '';
+    el.classList.toggle('info', !!info);
+  }
+
+  async function changeAccessPassword() {
+    const html = `<p class="small">접속 암호는 <b>스마트보드 관리자</b>만 바꿀 수 있습니다. 스마트보드에 로그인할 때 쓰는 이름과 비밀번호를 넣고, 새 접속 암호를 적어 주세요. 바꾸는 즉시 모든 선생님은 새 암호로만 들어올 수 있습니다.</p>
+      <form class="gate-form" id="chgForm" autocomplete="off">
+        <label>스마트보드 이름<input id="chgName" placeholder="스마트보드 로그인 이름"></label>
+        <label>스마트보드 비밀번호<input id="chgPw" type="password" placeholder="숫자 6자리"></label>
+        <label>새 접속 암호 (8자 이상)<input id="chgNew" type="password"></label>
+        <label>새 접속 암호 확인<input id="chgNew2" type="password"></label>
+        <p class="gate-msg" id="chgMsg"></p>
+      </form>`;
+    await dialog({
+      title: '접속 암호 바꾸기', html,
+      buttons: [{ label: '취소', value: null }, { label: '바꾸기', value: 'go', cls: 'primary' }],
+      onOpen(back, close) {
+        const msg = (t) => { $('#chgMsg', back).textContent = t || ''; };
+        const btn = $('.modal-foot [data-i="1"]', back);
+        const submit = async () => {
+          const name = $('#chgName', back).value.trim(), pw = $('#chgPw', back).value, n1 = $('#chgNew', back).value, n2 = $('#chgNew2', back).value;
+          if (!name || !pw) return msg('스마트보드 이름과 비밀번호를 넣어 주세요.');
+          if (n1.trim().length < 8) return msg('새 접속 암호는 8자 이상이어야 합니다.');
+          if (n1 !== n2) return msg('새 접속 암호 두 칸이 서로 다릅니다.');
+          btn.disabled = true; msg('확인 중…');
+          try {
+            await A.adminSetPassword(name, pw, n1);
+            close('done');
+            toast('접속 암호를 바꿨습니다. 지금부터 새 암호로 들어옵니다.', 4000);
+            gateMessage('접속 암호가 바뀌었습니다. 새 암호로 들어오세요.', true);
+          } catch (e) {
+            btn.disabled = false; msg(e.message || '바꾸지 못했습니다.');
+          }
+        };
+        // 기본 버튼의 닫기 동작 대신 직접 처리
+        btn.addEventListener('click', (e) => { e.stopPropagation(); submit(); }, true);
+        $('#chgForm', back).addEventListener('submit', (e) => { e.preventDefault(); submit(); });
+        setTimeout(() => $('#chgName', back).focus(), 0);
+      },
+    });
+  }
+
+  function startApp() {
+    document.body.classList.remove('locked');
+    $('#gate').hidden = true;
+    renderStepper();
+    if (ui.tab === 'extras') ui.tab = 'teachers';
+    if (!STEPS.some((s) => s.key === ui.tab)) ui.tab = 'setup';
+    renderAll();
+    showTab(ui.tab);
+    if (!ui.seenIntro) showIntro();
+  }
+
+  function openGate() {
+    document.body.classList.add('locked');
+    const gate = $('#gate');
+    gate.hidden = false;
+    const form = $('#gateForm'), input = $('#gatePw'), btn = $('#gateBtn');
+    A.status().then((st) => { if (st && st.configured === false) gateMessage('아직 접속 암호가 설정되지 않았습니다. 관리자가 아래에서 먼저 정해 주세요.', true); }).catch(() => { /* 입력 시 다시 안내 */ });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pw = input.value;
+      if (!pw) { gateMessage('접속 암호를 넣어 주세요.'); input.focus(); return; }
+      btn.disabled = true; gateMessage('확인 중…', true);
+      try {
+        const ok = await A.check(pw);
+        if (ok) { gateMessage(''); startApp(); return; }
+        gateMessage('접속 암호가 맞지 않습니다.');
+        input.value = ''; input.focus();
+      } catch (err) {
+        gateMessage(err.message || '확인하지 못했습니다.');
+      } finally { btn.disabled = false; }
+    });
+    gate.addEventListener('click', (e) => { if (e.target.closest('[data-act="gate-change"]')) changeAccessPassword(); });
+    setTimeout(() => input.focus(), 0);
+  }
+
   // 시작
-  renderStepper();
-  if (ui.tab === 'extras') ui.tab = 'teachers';
-  if (!STEPS.some((s) => s.key === ui.tab)) ui.tab = 'setup';
-  renderAll();
-  showTab(ui.tab);
-  if (!ui.seenIntro) showIntro();
-  window.__app = { get state() { return state; }, showHelp };
+  if (A && A.configured) openGate();
+  else startApp();
+  window.__app = { get state() { return state; }, showHelp, changeAccessPassword };
 })();
