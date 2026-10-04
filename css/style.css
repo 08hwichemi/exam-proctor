@@ -247,13 +247,13 @@ details.issue-group[open] > summary::before { content: "▾"; }
 .day-head b { font-size: 13px; }
 .day-head .muted { font-size: 12px; }
 .subj-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.subj-table th, .subj-table td { border-top: 1px solid var(--line); border-left: 1px solid var(--line); padding: 5px 6px; vertical-align: top; overflow: hidden; }
+.subj-table th, .subj-table td { border-top: 1px solid var(--line); border-left: 1px solid var(--line); padding: 4px 6px; vertical-align: top; overflow: hidden; }
 .subj-table thead th { border-top: none; background: #fff; font-size: 12px; font-weight: 600; color: var(--ink-2); padding: 5px 6px; }
 .subj-table th:first-child, .subj-table td:first-child { width: 44px; border-left: none; text-align: center; vertical-align: middle; padding: 4px 2px; }
 .subj-table td:first-child small { display: block; font-size: 10px; color: var(--ink-3); margin-top: 2px; }
 .subj-table tbody tr:nth-child(even) td { background: #fbfbfd; }
 .p-badge { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--day-soft, var(--surface-2)); color: var(--day, var(--ink-2)); border: 1px solid var(--day-line, var(--line)); font-weight: 700; font-size: 12px; }
-.sc { display: flex; flex-direction: column; gap: 4px; }
+.sc { display: flex; flex-direction: column; gap: 3px; }
 .sc-row { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; min-height: 20px; }
 .sc-name { flex: 1 1 60px; min-width: 0; height: 28px; font-weight: 600; text-align: center; padding: 0 5px; }
 .sc-name::placeholder { font-weight: 400; color: var(--ink-3); font-size: 11.5px; }
@@ -262,7 +262,10 @@ details.issue-group[open] > summary::before { content: "▾"; }
 .sc-mini.on { border-style: solid; border-color: var(--line-strong); background: var(--surface-2); color: var(--ink-2); }
 .sc-mini.sp:hover { border-color: var(--special); color: var(--special); }
 .sc-mini.sp.on { border-color: var(--special); background: #f1edff; color: var(--special); }
-.sc-room { flex: 0 1 84px; min-width: 56px; height: 28px; font-size: 12px; padding: 0 5px; border-color: #c9bdf3; background: #faf8ff; }
+.sc-foot { justify-content: flex-end; min-height: 24px; }
+.sc-roomwrap { display: inline-flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 0; max-width: 220px; margin-right: auto; }
+.sc-roomwrap > span { font-size: 11px; font-weight: 700; color: var(--special); flex: none; }
+.sc-room { flex: 1 1 60px; min-width: 44px; height: 22px; font-size: 12px; padding: 0 6px; border-color: #c9bdf3; background: #faf8ff; }
 .chips { display: inline-flex; align-items: center; gap: 2px; flex: none; }
 .chips-lbl { width: 26px; height: 20px; padding: 0; border: none; background: none; font-size: 11px; font-weight: 700; cursor: pointer; text-align: left; border-radius: 3px; }
 .chips-lbl:hover { text-decoration: underline; }
@@ -276,7 +279,7 @@ details.issue-group[open] > summary::before { content: "▾"; }
 .chip.all { font-size: 10px; color: var(--ink-3); }
 .chips.study .chip.on { background: #ffe58a; border-color: #e5b93c; color: var(--study-ink); font-weight: 700; }
 .chips.excl .chip.on { background: #ffc9c9; border-color: #e76f6f; color: var(--excl-ink); font-weight: 700; text-decoration: line-through; }
-.sc-sum { flex: 1 1 0; min-width: 0; margin-left: 6px; font-size: 10.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.sc-sum { flex: none; margin-left: auto; padding-left: 6px; font-size: 11px; color: var(--ink-3); white-space: nowrap; text-align: right; }
 .sc-sum.special { color: var(--special); }
 .sc-sum.none { color: var(--ink-3); font-style: italic; }
 .legend { display: inline-flex; gap: 10px; font-size: 12px; color: var(--ink-2); }
@@ -284,12 +287,13 @@ details.issue-group[open] > summary::before { content: "▾"; }
 
 /* ---------------- 3. 교사 명단 · 예외 ---------------- */
 .teachers-layout { display: grid; grid-template-columns: minmax(600px, 760px) minmax(0, 1fr); gap: 12px; align-items: start; }
+.teachers-layout > .panel { margin-bottom: 0; }
 .side-col { display: flex; flex-direction: column; gap: 12px; }
 .side-col .panel { margin-bottom: 0; }
-.ex-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: 8px; align-items: start; }
-.ex-grid table.grid th:first-child, .ex-grid table.grid td:first-child { width: 66px; }
-.ex-grid table.grid td select { padding-right: 18px; background-position: right 5px center; }
-.ex-grid .day-head { padding: 5px 8px; }
+.side-grid { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 12px; align-items: start; }
+.side-grid .panel { margin-bottom: 0; }
+table.grid td select.day-sel { font-weight: 700; color: var(--day); background-color: var(--day-soft); border-color: var(--day-line); }
+@media (max-width: 1500px) { .side-grid { grid-template-columns: 1fr; } }
 .ex-grid .day-card { margin-bottom: 0; }
 .tbl-wrap { overflow: auto; max-height: calc(100vh - 330px); border: 1px solid var(--line); border-radius: 6px; }
 .panel-foot { padding: 8px 14px; border-top: 1px solid var(--line); }
@@ -298,7 +302,11 @@ table.grid.dense td input, table.grid.dense td select { height: 26px; padding: 0
 @media (max-width: 1280px) { .teachers-layout { grid-template-columns: 1fr; } .tbl-wrap { max-height: 60vh; } }
 
 /* ---------------- 5. 결과 ---------------- */
-.actionbar { position: sticky; top: 106px; z-index: 20; }
+#tab-result.active { display: flex; flex-direction: column; height: calc(100vh - 52px - 51px - 12px - 20px - 23px); min-height: 480px; }
+#tab-result > .panel:not(.result-table-panel), #tab-result > .summary, #tab-result > .guide { flex: none; }
+.result-table-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }
+.result-table-panel > .panel-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.result-table-panel .scroll { flex: 1 1 auto; min-height: 0; max-height: none; }
 .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 10px; }
 .stat { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 12px; background: var(--surface); display: flex; flex-direction: column; gap: 1px; }
 .stat b { font-size: 18px; letter-spacing: -.01em; }
@@ -311,7 +319,7 @@ table.grid.dense td input, table.grid.dense td select { height: 26px; padding: 0
 .seg button { height: 30px; padding: 0 14px; border: none; background: none; cursor: pointer; font-weight: 600; color: var(--ink-2); }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button.active { background: var(--accent); color: #fff; }
-.scroll { overflow: auto; max-height: calc(100vh - 250px); min-height: 360px; border: 1px solid var(--line); border-radius: var(--r-sm); background: #fff; }
+.scroll { overflow: auto; border: 1px solid var(--line); border-radius: var(--r-sm); background: #fff; }
 .legend-row { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--ink-2); padding: 6px 0 8px; }
 
 table.res { border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
@@ -414,7 +422,8 @@ table.res td.subjcol.study { background: var(--study); }
   .topbar .save-state { display: none; }
   .brand-text small { display: none; }
   .stepper { position: static; }
-  .actionbar { position: static; }
+  #tab-result.active { height: auto; }
+  .result-table-panel .scroll { max-height: 70vh; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .subj-table th:first-child, .subj-table td:first-child { width: 40px; }
 }
