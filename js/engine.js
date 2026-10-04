@@ -106,6 +106,7 @@
       return '';
     }).trim();
 
+    // 추가반(특별실): 새 방식은 cell.special / cell.room, 예전 방식은 과목명 뒤 "*(장소)"
     let special = false;
     let room = '';
     const star = text.match(/\*\s*(?:\(([^)]*)\))?/);
@@ -113,6 +114,11 @@
       special = true;
       room = (star[1] || '').trim();
       text = (text.slice(0, star.index) + text.slice(star.index + star[0].length)).trim();
+    }
+    if (cell.special) {
+      special = true;
+      const r = String(cell.room == null ? '' : cell.room).trim();
+      if (r) room = r;
     }
     if (special && !room) room = `${(classCount || 7) + 1}반`;
 

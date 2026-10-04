@@ -49,12 +49,12 @@
   }
 
   // 모달: buttons [{label, value, cls}] → Promise(value)
-  function dialog({ title, html, buttons, wide, onOpen }) {
+  function dialog({ title, html, buttons, wide, xwide, onOpen }) {
     return new Promise((resolve) => {
       const btns = buttons || [{ label: '닫기', value: null }];
       const back = document.createElement('div');
       back.className = 'modal-back';
-      back.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true">
+      back.innerHTML = `<div class="modal ${wide ? 'wide' : ''} ${xwide ? 'xwide' : ''}" role="dialog" aria-modal="true">
         <div class="modal-head"><h3>${esc(title)}</h3><button class="icon-btn" data-close aria-label="닫기">✕</button></div>
         <div class="modal-body">${html}</div>
         <div class="modal-foot">${btns.map((b, i) => `<button class="btn ${b.cls || ''}" data-i="${i}">${esc(b.label)}</button>`).join('')}</div>
@@ -79,18 +79,33 @@
   // ---------------------------------------------------------------
   // 상태
   // ---------------------------------------------------------------
-  const emptyCell = () => ({ name: '', study: [], exclude: [] });
+  const emptyCell = () => ({ name: '', study: [], exclude: [], special: false, room: '' });
   const newDay = (periods) => ({ date: '', periods: periods || 3, subjects: Array.from({ length: periods || 3 }, () => [emptyCell(), emptyCell(), emptyCell()]), exceptions: [] });
   const newTeacher = () => ({ name: '', subject: '', homeroom: '', type: '일반', target: '', prev: '' });
 
   function defaultState() {
     return {
       version: 2, term: TERMS[0],
-      options: { exclude3rd: true, studyHallClassroom: false, corridors: 2, noRepeatRoom: true, roomHistoryScope: 'exam', compensate3rd: 1 },
+      options: { exclude3rd: true, studyHallClassroom: false, corridors: 2, noRepeatRoom: true, roomHistoryScope: 'exam', compensate3rd: 0 },
       roomHistory: {},
       classes: [7, 7, 7], days: [newDay(3)], teachers: [], specials: [{ room: '', teacher: '', hours: '' }],
       result: null, meta: { savedAt: null, backupAt: null, dirty: false },
     };
+  }
+
+  // 과목 칸 정리: 예전 방식("과목*(장소)")은 추가반 필드로 옮김
+  function normalizeCell(c) {
+    c = c || {};
+    let name = String(c.name || '');
+    let special = !!c.special;
+    let room = String(c.room == null ? '' : c.room).trim();
+    const star = name.match(/\*\s*(?:\(([^)]*)\))?/);
+    if (star) {
+      special = true;
+      if (!room) room = (star[1] || '').trim();
+      name = (name.slice(0, star.index) + name.slice(star.index + star[0].length)).trim();
+    }
+    return { name, study: Array.isArray(c.study) ? c.study.map(Number) : [], exclude: Array.isArray(c.exclude) ? c.exclude.map(Number) : [], special, room };
   }
 
   function normalizeState(s) {
@@ -106,10 +121,7 @@
       while (subjects.length < periods) subjects.push([emptyCell(), emptyCell(), emptyCell()]);
       return {
         date: day.date || '', periods,
-        subjects: subjects.map((row) => [0, 1, 2].map((g) => {
-          const c = (row || [])[g] || {};
-          return { name: c.name || '', study: Array.isArray(c.study) ? c.study.map(Number) : [], exclude: Array.isArray(c.exclude) ? c.exclude.map(Number) : [] };
-        })),
+        subjects: subjects.map((row) => [0, 1, 2].map((g) => normalizeCell((row || [])[g]))),
         exceptions: Array.isArray(day.exceptions) ? day.exceptions.map((x) => ({ period: x.period == null ? '' : String(x.period), name: x.name || '', reason: x.reason || '' })) : [],
       };
     });
@@ -132,10 +144,10 @@
     s.days = dayRows.length ? dayRows.map((r) => newDay(Math.max(1, parseInt(r[2], 10) || 1))) : [newDay(3)];
     dayRows.forEach((r, i) => { s.days[i].date = r[1] || ''; });
     const toCell = (v) => {
-      if (v && typeof v === 'object') return { name: v.text || '', study: (v.study_btns || v.active_btns || []).map(Number), exclude: (v.exclude_btns || []).map(Number) };
-      return { name: String(v || ''), study: [], exclude: [] };
+      if (v && typeof v === 'object') return normalizeCell({ name: v.text || '', study: (v.study_btns || v.active_btns || []).map(Number), exclude: (v.exclude_btns || []).map(Number) });
+      return normalizeCell({ name: String(v || '') });
     };
-    (data.subject_table || []).forEach((r, idx) => {
+    (data.subject_table || []).forEach((r) => {
       const d = dayNo(r[0], 0), p = parseInt(r[2], 10) || 1;
       if (!s.days[d]) return;
       while (s.days[d].subjects.length < p) s.days[d].subjects.push([emptyCell(), emptyCell(), emptyCell()]);
@@ -164,7 +176,7 @@
   }
 
   let state = loadState();
-  let ui = { tab: 'setup', sub: 'grid' };
+  let ui = { tab: 'setup', sub: 'grid', seenIntro: false };
   try { ui = Object.assign(ui, JSON.parse(localStorage.getItem(UI_KEY) || '{}')); } catch (e) { /* 무시 */ }
 
   let saveTimer = null;
@@ -181,9 +193,10 @@
 
   function renderSaveState() {
     const el = $('#saveState');
-    if (!storageOK) { el.className = 'save-state warn'; el.textContent = '⚠ 이 브라우저에는 자동 저장이 안 됩니다. 백업 파일을 꼭 저장하세요.'; }
-    else { el.className = 'save-state'; el.textContent = state.meta.savedAt ? `✔ 브라우저에 자동 저장됨 ${timeText(state.meta.savedAt)}` : ''; }
+    if (!storageOK) { el.className = 'save-state warn'; el.textContent = '이 브라우저에는 자동 저장이 안 됩니다. 백업 파일을 꼭 저장하세요.'; }
+    else { el.className = 'save-state'; el.textContent = state.meta.savedAt ? `자동 저장됨 · ${timeText(state.meta.savedAt)}` : ''; }
     $('#backupDot').innerHTML = state.meta.dirty ? '<span class="dot" title="마지막 백업 이후 바뀐 내용이 있습니다"></span>' : '';
+    $('#brandSub').textContent = state.term;
   }
 
   // 경로("teachers.3.name")로 값 읽기/쓰기
@@ -193,10 +206,24 @@
     for (let i = 0; i < ks.length - 1; i++) o = o[ks[i]];
     o[ks[ks.length - 1]] = val;
   }
+  function getPath(obj, path) { return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj); }
 
   // ---------------------------------------------------------------
-  // 탭
+  // 단계
   // ---------------------------------------------------------------
+  const STEPS = [
+    { key: 'setup', title: '기본 설정', next: '시험 과목을 교시별로 입력합니다.' },
+    { key: 'subjects', title: '시험 과목', next: '교사 명단을 엑셀에서 불러오거나 붙여넣습니다.' },
+    { key: 'teachers', title: '교사 명단', next: '특수실 담당과 교시별 예외(출장·연가)를 적습니다. 없으면 건너뛰어도 됩니다.' },
+    { key: 'extras', title: '특수실 · 예외', next: '배정을 실행하고 결과를 검토한 뒤 엑셀로 저장합니다.' },
+    { key: 'result', title: '배정 결과', next: '' },
+  ];
+  const stepIndex = (k) => STEPS.findIndex((s) => s.key === k);
+
+  function renderStepper() {
+    $('#steps').innerHTML = STEPS.map((s, i) => `<button class="step" data-tab="${s.key}"><span class="step-no">${i + 1}</span><span class="step-txt"><b>${s.title}</b><small id="st-${s.key}"></small></span></button>`).join('');
+  }
+
   const renderers = {};
   function showTab(name) {
     ui.tab = name; saveUI();
@@ -206,99 +233,153 @@
     window.scrollTo(0, 0);
   }
   function renderAll() {
-    Object.keys(renderers).forEach((k) => { if (k === ui.tab) renderers[k](); });
+    renderers[ui.tab]();
     renderSaveState();
     updateTeacherDatalist();
     updateBadges();
   }
 
+  function subjectProgress() {
+    let total = 0, filled = 0;
+    state.days.forEach((day) => day.subjects.slice(0, day.periods).forEach((row) => row.forEach((c, g) => { total++; if (E.parseCell(c, state.classes[g]).active) filled++; })));
+    return { total, filled };
+  }
+
   function updateBadges() {
     let model;
     try { model = E.buildModel(state); } catch (e) { return; }
+    const set = (key, text, cls) => {
+      const b = $(`.step[data-tab="${key}"]`);
+      if (!b) return;
+      b.classList.remove('done', 'warn', 'bad');
+      if (cls) b.classList.add(cls);
+      $(`#st-${key}`).textContent = text;
+    };
+    const periods = state.days.reduce((a, d) => a + d.periods, 0);
+    set('setup', `${state.term} · ${state.days.length}일 ${periods}교시 · ${state.classes.join('/')}반`, 'done');
+    const sp = subjectProgress();
+    set('subjects', sp.filled ? `${sp.total}칸 중 ${sp.filled}칸 입력` : '아직 입력 전', sp.filled ? 'done' : '');
+    const nT = state.teachers.filter((t) => t.name.trim()).length;
+    set('teachers', nT ? `${nT}명` : '명단 없음', nT ? 'done' : '');
+    const nSp = state.specials.filter((r) => r.room.trim() && r.teacher.trim()).length;
+    const nEx = state.days.reduce((a, d) => a + d.exceptions.filter((x) => x.name.trim()).length, 0);
+    set('extras', `특수실 ${nSp} · 예외 ${nEx}`, 'done');
     const err = model.issues.filter((i) => i.level === 'error').length;
     const warn = model.issues.filter((i) => i.level === 'warn').length;
-    const b = $('.step[data-tab="result"]');
-    b.innerHTML = '5. 배정 결과' + (err ? ` <span class="badge bad">${err}</span>` : warn ? ` <span class="badge warn">${warn}</span>` : '');
-    $('.step[data-tab="teachers"]').innerHTML = `3. 교사 명단 <span class="badge">${state.teachers.filter((t) => t.name.trim()).length}</span>`;
+    if (err) set('result', `확인 필요 ${err}건`, 'bad');
+    else if (state.result) set('result', `배정됨 ${timeText(state.result.createdAt)}${warn ? ` · 주의 ${warn}` : ''}`, warn ? 'warn' : 'done');
+    else set('result', warn ? `주의 ${warn}건 · 배정 가능` : '배정 준비됨', warn ? 'warn' : '');
   }
 
   function updateTeacherDatalist() {
     $('#teacherNames').innerHTML = state.teachers.filter((t) => t.name.trim()).map((t) => `<option value="${esc(t.name.trim())}">`).join('');
   }
 
+  // 공통 조각
+  const helpDot = (topic) => `<button class="help-dot" data-act="help" data-topic="${topic}" title="이 부분 설명 보기">?</button>`;
+  function panelHead(title, topic, desc, right) {
+    return `<div class="panel-head"><h2>${title}</h2>${topic ? helpDot(topic) : ''}${desc ? `<span class="desc">${desc}</span>` : ''}<span class="spacer"></span>${right || ''}</div>`;
+  }
+  function guide(items, topic) {
+    return `<div class="guide"><b>할 일</b><ol>${items.map((x) => `<li>${x}</li>`).join('')}</ol><span class="spacer"></span><button class="btn sm" data-act="help" data-topic="${topic}">자세히</button></div>`;
+  }
+  function stepNav(key) {
+    const i = stepIndex(key);
+    const prev = STEPS[i - 1], next = STEPS[i + 1], cur = STEPS[i];
+    return `<div class="stepnav">
+      ${prev ? `<button class="btn" data-act="goto" data-tab="${prev.key}">← ${i}. ${prev.title}</button>` : '<span></span>'}
+      <span class="tip">${next ? `<b>다음 단계:</b> ${cur.next}` : '결과가 마음에 들면 <b>엑셀로 저장</b>하고, 다음 회차를 준비하려면 <b>누적 반영</b>을 누르세요.'}</span>
+      ${next ? `<button class="btn primary" data-act="goto" data-tab="${next.key}">${i + 2}. ${next.title} →</button>` : ''}
+    </div>`;
+  }
+  const sw = (bind, on, extra) => `<label class="switch"><input type="checkbox" data-bind="${bind}" ${extra || ''} ${on ? 'checked' : ''}><i></i></label>`;
+
   // ---------------------------------------------------------------
   // 1. 기본 설정
   // ---------------------------------------------------------------
   renderers.setup = function () {
     const s = state;
+    const histN = Object.keys(s.roomHistory || {}).length;
     $('#tab-setup').innerHTML = `
-    <div class="grid-2">
+    ${guide(['배정 회차와 학년별 반 수를 확인합니다.', '시험 일차를 추가하고 날짜·교시 수를 적습니다.', '옵션은 기본값 그대로 두어도 됩니다.'], 's1')}
+    <div class="grid-3">
       <div class="panel">
-        <div class="panel-head"><h2>📌 배정 회차와 옵션</h2></div>
-        <div class="row" style="margin-bottom:12px">
-          <label class="field"><span>배정 회차</span>
-            <select data-bind="term" data-rerender="setup">${TERMS.map((t) => `<option ${t === s.term ? 'selected' : ''}>${t}</option>`).join('')}</select>
-          </label>
-          <label class="field"><span>학년별 복도 감독 수</span>
-            <input type="number" class="num" min="0" max="6" data-bind="options.corridors" data-num value="${s.options.corridors}">
-          </label>
+        ${panelHead('회차와 옵션', 's1-options')}
+        <div class="panel-body">
+          <div class="opt">
+            <span class="opt-name">배정 회차</span>
+            <span class="opt-ctl"><select data-bind="term" data-rerender="setup">${TERMS.map((t) => `<option ${t === s.term ? 'selected' : ''}>${t}</option>`).join('')}</select></span>
+            <span class="opt-desc">${s.term === TERMS[0] ? '1차는 누적 시수 없이 0부터 시작합니다.' : '교사 명단의 "이전 누적"을 더해 누적이 적은 선생님께 더 배정합니다.'}</span>
+          </div>
+          <div class="opt">
+            <span class="opt-name">학년별 복도 감독 수</span>
+            <span class="opt-ctl"><input type="number" class="num" min="0" max="6" data-bind="options.corridors" data-num value="${s.options.corridors}"></span>
+            <span class="opt-desc">교시마다 학년별로 두는 복도 감독 인원입니다. 0이면 복도 감독을 두지 않습니다.</span>
+          </div>
+          ${s.term === '4차 고사' ? `<div class="opt">
+            <span class="opt-name bad-text">4차: 3학년 담임·부장 제외</span>
+            <span class="opt-ctl">${sw('options.exclude3rd', s.options.exclude3rd)}</span>
+            <span class="opt-desc">담임 칸이 <code>3-</code>로 시작하는 선생님을 배정에서 뺍니다. 이분들의 시수는 3차까지의 누적을 기준으로 봅니다.</span>
+          </div>` : ''}
+          <div class="opt">
+            <span class="opt-name">전체 자습 교시에도 교실 감독</span>
+            <span class="opt-ctl">${sw('options.studyHallClassroom', s.options.studyHallClassroom)}</span>
+            <span class="opt-desc">끄면 학년 전체가 자습인 교시에는 복도 감독만 둡니다.</span>
+          </div>
+          <div class="opt">
+            <span class="opt-name">같은 교실에 두 번 넣지 않음</span>
+            <span class="opt-ctl">${sw('options.noRepeatRoom', s.options.noRepeatRoom, 'data-rerender="setup"')}
+              <select data-bind="options.roomHistoryScope" data-rerender="setup" ${s.options.noRepeatRoom ? '' : 'disabled'}>
+                <option value="exam" ${s.options.roomHistoryScope !== 'year' ? 'selected' : ''}>이번 시험 안에서</option>
+                <option value="year" ${s.options.roomHistoryScope === 'year' ? 'selected' : ''}>올해 이전 회차까지</option>
+              </select></span>
+            <span class="opt-desc">한 선생님을 같은 학년-반 교실에 다시 넣지 않습니다.${s.options.roomHistoryScope === 'year' ? ` 이전 회차 교실 이력 ${histN}명분을 함께 피합니다(교사 명단에서 이전 결과 엑셀을 불러오면 쌓입니다).` : ''}</span>
+          </div>
+          <div class="opt">
+            <span class="opt-name">3학년 담임 연간 보정 <span class="badge">고급</span></span>
+            <span class="opt-ctl"><input type="number" class="num" min="0" max="5" data-bind="options.compensate3rd" data-num value="${s.options.compensate3rd}"> 시간</span>
+            <span class="opt-desc">기본 0. 4차에 빠지는 3학년 담임은 3차까지의 평균에 맞추는 것이 원칙이므로 보통 0으로 둡니다. 연말 합계까지 맞추고 싶을 때만 1을 넣으면 1~3차에서 회차당 1시간씩 더 배정합니다.</span>
+          </div>
         </div>
-        ${s.term === '4차 고사' ? `<label class="inline" style="margin-bottom:8px"><input type="checkbox" data-bind="options.exclude3rd" ${s.options.exclude3rd ? 'checked' : ''}> <b style="color:var(--bad)">3학년 담임/부장 배정 제외</b> <span class="muted">(담임 칸이 3-으로 시작하는 선생님)</span></label><br>` : ''}
-        <label class="inline"><input type="checkbox" data-bind="options.studyHallClassroom" ${s.options.studyHallClassroom ? 'checked' : ''}> 학년 전체가 자습인 교시에도 <b>교실 감독</b> 배정 <span class="muted">(끄면 복도 감독만)</span></label>
-        <div class="row" style="margin-top:8px">
-          <label class="inline"><input type="checkbox" data-bind="options.noRepeatRoom" data-rerender="setup" ${s.options.noRepeatRoom ? 'checked' : ''}> <b>한 번 들어간 교실에는 다시 넣지 않음</b></label>
-          <select data-bind="options.roomHistoryScope" data-rerender="setup" ${s.options.noRepeatRoom ? '' : 'disabled'}>
-            <option value="exam" ${s.options.roomHistoryScope !== 'year' ? 'selected' : ''}>이번 시험 안에서</option>
-            <option value="year" ${s.options.roomHistoryScope === 'year' ? 'selected' : ''}>올해 이전 회차 교실까지</option>
-          </select>
-          <span class="muted">${s.options.roomHistoryScope === 'year' ? `(교실 이력 ${Object.keys(s.roomHistory || {}).length}명분 보관 중 — 3. 교사 명단에서 이전 결과 엑셀을 불러오면 쌓입니다)` : ''}</span>
-        </div>
-        <div class="row" style="margin-top:8px">
-          <label class="inline"><b>3학년 담임 연간 보정</b>
-            <input type="number" class="num" min="0" max="5" data-bind="options.compensate3rd" data-num value="${s.options.compensate3rd}"> 시간
-          </label>
-          <span class="muted">4차에 3학년 담임/부장을 뺄 예정이면, 1~3차에서 회차당 이만큼 더 배정해 연말 합계를 맞춥니다. (0 = 보정 안 함)</span>
-        </div>
-        <p class="hint" style="margin-top:12px">${s.term === TERMS[0]
-          ? '1차 고사는 이전 누적 시수를 쓰지 않고 0부터 시작합니다.'
-          : `이전 회차까지의 누적 시수(3. 교사 명단의 "이전 누적")를 더해서, 누적이 적은 선생님께 더 배정합니다.`}</p>
       </div>
 
       <div class="panel">
-        <div class="panel-head"><h2>🏫 학년별 반 수</h2></div>
-        <div class="row">
-          ${[0, 1, 2].map((i) => `<label class="field"><span>${i + 1}학년</span><input type="number" class="num" min="1" max="30" data-bind="classes.${i}" data-num value="${s.classes[i]}"></label>`).join('')}
+        ${panelHead('학년별 반 수와 시험 일차', 's1-days', '', '<button class="btn sm" data-act="day-add">+ 일차 추가</button>')}
+        <div class="panel-body">
+          <div class="row" style="margin-bottom:10px">
+            ${[0, 1, 2].map((i) => `<label class="field"><span>${i + 1}학년 반 수</span><input type="number" class="num" min="1" max="30" data-bind="classes.${i}" data-num value="${s.classes[i]}"></label>`).join('')}
+            <span class="muted small">반 수를 바꾸면 과목 입력의 자습/제외 버튼 개수가 바로 맞춰집니다.</span>
+          </div>
+          <table class="grid">
+            <thead><tr><th style="width:64px">일차</th><th>시험일</th><th style="width:90px">교시 수</th><th style="width:40px"></th></tr></thead>
+            <tbody>${s.days.map((d, i) => `<tr>
+              <td><b>${i + 1}일차</b></td>
+              <td><input data-bind="days.${i}.date" value="${esc(d.date)}" placeholder="예: 4/27 (월)"></td>
+              <td><input type="number" min="1" max="10" data-bind="days.${i}.periods" data-num value="${d.periods}"></td>
+              <td><button class="icon-btn" data-act="day-del" data-i="${i}" title="이 일차 삭제">✕</button></td>
+            </tr>`).join('')}</tbody>
+          </table>
+          <p class="muted small" style="margin-top:8px">일차·교시 수를 바꾸면 2단계 과목 칸과 4단계 예외 칸이 자동으로 맞춰집니다.</p>
         </div>
-        <p class="hint">반 수를 바꾸면 2. 시험 과목의 자습/제외 버튼이 바로 바뀝니다. 입력한 과목은 그대로 남습니다.</p>
+      </div>
+
+      <div class="panel">
+        ${panelHead('자료 보관', 's0-backup')}
+        <div class="panel-body">
+          <p class="small" style="margin-bottom:8px">입력한 내용은 <b>이 컴퓨터의 이 브라우저</b>에 자동 저장됩니다. 다른 컴퓨터로 옮기거나 브라우저 기록 삭제에 대비하려면 백업 파일을 받아 두세요. 백업 파일 하나에 설정·과목·교사·예외·배정 결과(직접 고친 칸 포함)가 모두 들어 있습니다.</p>
+          <div class="row tight">
+            <button class="btn primary" data-act="backup-save">백업 파일 저장</button>
+            <button class="btn" data-act="backup-load">백업 불러오기</button>
+          </div>
+          <p class="muted small" style="margin-top:8px">마지막 백업: ${s.meta.backupAt ? timeText(s.meta.backupAt) : '없음'} · 예전 파이썬 프로그램의 DATA SAVE 파일(.json)도 불러올 수 있습니다.</p>
+          <div class="row" style="margin-top:12px; padding-top:10px; border-top:1px solid var(--line)">
+            <button class="btn sm danger" data-act="reset-all">전체 초기화</button>
+            <span class="muted small">모든 입력과 결과를 지우고 처음 상태로 돌립니다.</span>
+          </div>
+        </div>
       </div>
     </div>
-
-    <div class="panel">
-      <div class="panel-head"><h2>📅 시험 일차와 교시</h2><span class="spacer"></span><button class="btn" data-act="day-add">➕ 일차 추가</button></div>
-      <table class="grid" style="max-width:640px">
-        <thead><tr><th>일차</th><th>시험일 (예: 4/27)</th><th>교시 수</th><th>삭제</th></tr></thead>
-        <tbody>${s.days.map((d, i) => `<tr>
-          <td><b>${i + 1}일차</b></td>
-          <td><input data-bind="days.${i}.date" value="${esc(d.date)}" placeholder="4/27"></td>
-          <td><input type="number" class="num" min="1" max="10" data-bind="days.${i}.periods" data-num value="${d.periods}"></td>
-          <td><button class="icon-btn" data-act="day-del" data-i="${i}" title="이 일차 삭제">✕</button></td>
-        </tr>`).join('')}</tbody>
-      </table>
-      <p class="hint">일차·교시를 바꾸면 2. 시험 과목과 4. 예외 입력칸이 자동으로 맞춰집니다. (예전의 "연동 생성하기" 버튼이 필요 없습니다)</p>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h2>💾 자료 보관</h2></div>
-      <p class="hint" style="margin-top:0">입력한 내용은 <b>이 컴퓨터의 이 브라우저</b>에 자동으로 저장됩니다. 다른 컴퓨터에서 이어서 하거나, 브라우저 기록을 지울 때를 대비해 <b>백업 파일</b>을 저장해 두세요.
-      백업 파일 하나에 설정·과목·교사·예외·배정 결과(직접 고친 내용 포함)가 모두 들어 있습니다. 예전 파이썬 프로그램의 DATA SAVE 파일(.json)도 불러올 수 있습니다.</p>
-      <div class="row">
-        <button class="btn primary" data-act="backup-save">💾 백업 파일 저장</button>
-        <button class="btn" data-act="backup-load">📂 백업 불러오기</button>
-        <span class="muted">마지막 백업: ${state.meta.backupAt ? timeText(state.meta.backupAt) : '없음'}</span>
-        <span class="spacer" style="flex:1"></span>
-        <button class="btn danger" data-act="reset-all">🗑 전체 초기화</button>
-      </div>
-    </div>`;
+    ${stepNav('setup')}`;
   };
 
   // ---------------------------------------------------------------
@@ -308,13 +389,13 @@
     const cell = state.days[d].subjects[p - 1][g - 1];
     const cc = state.classes[g - 1];
     const pc = E.parseCell(cell, cc);
-    if (!pc.active) return { cls: 'none', text: '시험 없음 → 감독 안 함' };
+    if (!pc.active) return { cls: 'none', text: '시험 없음 · 감독 없음' };
     const open = range(1, cc).filter((c) => !pc.exclude.includes(c));
     const fullStudy = pc.allStudy || (open.length > 0 && open.every((c) => pc.study.includes(c)));
     const rooms = fullStudy && !state.options.studyHallClassroom ? 0 : open.length;
     const parts = [];
     if (rooms) parts.push(`교실 ${rooms}`);
-    if (pc.special) parts.push(`추가반 1(${pc.room})`);
+    if (pc.special) parts.push(`추가반 ${pc.room}`);
     if (state.options.corridors) parts.push(`복도 ${state.options.corridors}`);
     let text = parts.join(' · ');
     if (fullStudy) text = '전체 자습 · ' + text;
@@ -324,37 +405,42 @@
   function subjectCellHTML(d, p, g) {
     const cell = state.days[d].subjects[p - 1][g - 1];
     const cc = state.classes[g - 1];
+    const b = `days.${d}.subjects.${p - 1}.${g - 1}`;
     const chips = (kind, list) => range(1, cc).map((c) => `<button class="chip ${list.includes(c) ? 'on' : ''}" data-act="chip" data-kind="${kind}" data-d="${d}" data-p="${p}" data-g="${g}" data-c="${c}" title="${c}반 ${kind === 'study' ? '자습' : '감독 제외'}">${c}</button>`).join('');
+    const allOn = cell.study.length >= cc;
     const sum = cellSummary(d, p, g);
-    return `<input data-bind="days.${d}.subjects.${p - 1}.${g - 1}.name" data-subj="${d},${p},${g}" value="${esc(cell.name)}" placeholder="과목명">
-      <div class="chips study"><b>자습</b>${chips('study', cell.study)}</div>
-      <div class="chips excl"><b>제외</b>${chips('exclude', cell.exclude)}</div>
-      <div class="cell-sum ${sum.cls}" data-sum="${d},${p},${g}">${esc(sum.text)}</div>`;
+    return `<div class="sc">
+      <div class="sc-row">
+        <input class="sc-name" data-bind="${b}.name" data-subj="${d},${p},${g}" value="${esc(cell.name)}" placeholder="과목명 (비우면 시험 없음)">
+        <button class="sc-sp ${cell.special ? 'on' : ''}" data-act="sp-toggle" data-d="${d}" data-p="${p}" data-g="${g}" title="이동수업 등으로 교실이 하나 더 필요할 때">${cell.special ? '추가반 ✓' : '+ 추가반'}</button>
+        ${cell.special ? `<input class="sc-room" data-bind="${b}.room" data-subj="${d},${p},${g}" value="${esc(cell.room)}" placeholder="장소 (예: 음악실)">` : ''}
+      </div>
+      <div class="sc-row">
+        <span class="chips study"><b>자습</b><button class="chip all ${allOn ? 'on' : ''}" data-act="chip-all" data-d="${d}" data-p="${p}" data-g="${g}" title="전체 자습">전</button>${chips('study', cell.study)}</span>
+        <span class="chips excl"><b>제외</b>${chips('exclude', cell.exclude)}</span>
+        <span class="sc-sum ${sum.cls}" data-sum="${d},${p},${g}">${esc(sum.text)}</span>
+      </div>
+    </div>`;
   }
 
   renderers.subjects = function () {
     $('#tab-subjects').innerHTML = `
+    ${guide(['교시마다 학년별 시험 과목을 적습니다. 엑셀 표를 복사해 과목 칸에 붙여넣으면 한 번에 채워집니다.', '자습하는 반은 <b>자습</b> 번호를, 감독을 넣지 않을 반은 <b>제외</b> 번호를 누릅니다.', '이동수업으로 교실이 하나 더 필요하면 <b>+ 추가반</b>을 누르고 장소를 적습니다.'], 's2')}
     <div class="panel">
-      <div class="panel-head">
-        <h2>📝 일차별 시험 과목</h2>
-        <span class="legend"><span><i style="background:#ffe066"></i>자습반</span><span><i style="background:#ffb3ba"></i>감독 제외반</span></span>
-        <span class="spacer"></span>
-        <button class="btn" data-act="subj-paste">📋 엑셀에서 붙여넣기</button>
-      </div>
-      <p class="hint" style="margin-top:0">
-        · 과목명 뒤에 <code>*</code>를 붙이면 추가반(특별실)이 생깁니다. 장소는 <code>수학*(음악실)</code>처럼 괄호로 적습니다.<br>
-        · 과목 칸에 <code>자습</code>이라고 적으면 학년 전체가 자습, 칸을 비우면 그 학년은 시험이 없어 감독을 넣지 않습니다.<br>
-        · 엑셀에서 과목 여러 칸을 복사해 아무 과목 칸에나 붙여넣으면(Ctrl+V) 아래·오른쪽으로 채워집니다.
-      </p>
+      ${panelHead('일차별 시험 과목', 's2', `<span class="legend"><span><i style="background:#ffe58a"></i>자습반</span><span><i style="background:#ffc9c9"></i>감독 제외반</span><span><i style="background:#f1edff;border-color:#c9bdf3"></i>추가반</span></span>`,
+        '<button class="btn sm" data-act="subj-clear">모두 지우기</button><button class="btn sm primary" data-act="subj-paste">엑셀에서 붙여넣기</button>')}
+      <div class="panel-body">
       ${state.days.map((day, d) => `
         <div class="day-card">
-          <h3>${d + 1}일차 ${day.date ? '· ' + esc(day.date) : ''}</h3>
+          <div class="day-head"><h3>${d + 1}일차</h3><span class="muted">${esc(day.date) || '날짜 미입력'} · ${day.periods}교시</span></div>
           <table class="subj-table">
-            <thead><tr><th>교시</th><th>1학년 (${state.classes[0]}반)</th><th>2학년 (${state.classes[1]}반)</th><th>3학년 (${state.classes[2]}반)</th></tr></thead>
-            <tbody>${range(1, day.periods).map((p) => `<tr><td>${p}교시</td>${[1, 2, 3].map((g) => `<td class="subj-cell" id="sc-${d}-${p}-${g}">${subjectCellHTML(d, p, g)}</td>`).join('')}</tr>`).join('')}</tbody>
+            <thead><tr><th>교시</th><th>1학년 <span class="muted">(${state.classes[0]}반)</span></th><th>2학년 <span class="muted">(${state.classes[1]}반)</span></th><th>3학년 <span class="muted">(${state.classes[2]}반)</span></th></tr></thead>
+            <tbody>${range(1, day.periods).map((p) => `<tr><td>${p}교시</td>${[1, 2, 3].map((g) => `<td id="sc-${d}-${p}-${g}">${subjectCellHTML(d, p, g)}</td>`).join('')}</tr>`).join('')}</tbody>
           </table>
         </div>`).join('')}
-    </div>`;
+      </div>
+    </div>
+    ${stepNav('subjects')}`;
   };
 
   function periodOrder() {
@@ -374,7 +460,9 @@
       cols.forEach((v, j) => {
         const g = startG + j;
         if (g > 3) return;
-        state.days[d].subjects[p - 1][g - 1].name = String(v || '').trim();
+        const cell = state.days[d].subjects[p - 1][g - 1];
+        const nc = normalizeCell({ name: String(v || '').trim(), study: cell.study, exclude: cell.exclude, special: cell.special, room: cell.room });
+        Object.assign(cell, nc);
         n++;
       });
     });
@@ -397,44 +485,38 @@
     const names = ts.map((t) => t.name.trim());
     const dup = new Set(names.filter((n, i) => n && names.indexOf(n) !== i));
     const prevOff = state.term === TERMS[0];
+    const histN = Object.keys(state.roomHistory).length;
     $('#tab-teachers').innerHTML = `
+    ${guide(['<b>엑셀 불러오기</b> 또는 <b>붙여넣기</b>로 명단을 한 번에 넣습니다. 머리글(이름·과목·담임·구분·목표시수)이 있으면 열 순서는 상관없습니다.', '담임은 <code>2-5</code>, 부장은 <code>3-부장</code>처럼 적고, 구분(일반·고사담당·원로·순회·제외)을 확인합니다.', prevOff ? '1차 고사는 이전 누적을 쓰지 않습니다.' : '<b>이전 회차 결과 엑셀</b>을 불러와 누적 시수를 채웁니다.'], 's3')}
     <div class="panel">
-      <div class="panel-head">
-        <h2>👨‍🏫 전체 교사 명단</h2>
-        ${E.TYPES.map((t) => `<span class="badge">${t} ${count[t] || 0}</span>`).join(' ')}
-        <span class="spacer"></span>
-        <button class="btn" data-act="t-add">➕ 추가</button>
-        <button class="btn orange" data-act="t-excel">📂 엑셀 파일 불러오기</button>
-        <button class="btn" data-act="t-paste">📋 붙여넣기</button>
+      ${panelHead('전체 교사 명단', 's3', E.TYPES.map((t) => `<span class="badge">${t} ${count[t] || 0}</span>`).join(' '),
+        `<button class="btn sm" data-act="t-add">+ 한 명 추가</button><button class="btn sm" data-act="t-paste">붙여넣기</button><button class="btn sm primary" data-act="t-excel">엑셀 파일 불러오기</button>`)}
+      <div class="panel-body" style="padding-top:8px">
+        <div class="row" style="margin-bottom:8px">
+          <button class="btn sm" data-act="t-prev-import" ${prevOff ? 'title="1차 고사에서는 누적을 쓰지 않습니다. 불러오면 2차 고사로 바뀝니다."' : ''}>이전 회차 결과 엑셀에서 누적 불러오기</button>
+          <button class="btn sm" data-act="t-prev-clear">누적 비우기</button>
+          <span class="muted small">${prevOff ? '1차 고사: 이전 누적은 쓰지 않습니다.' : `이전 누적 = 지난 회차까지의 전체 시수.`}${histN ? ` 교실 이력 ${histN}명분 보관 중.` : ''}</span>
+          <span class="spacer"></span>
+          <button class="btn sm ghost danger" data-act="t-clear">명단 전체 삭제</button>
+        </div>
+        <div style="overflow:auto; max-height: calc(100vh - 330px); border:1px solid var(--line); border-radius:6px">
+        <table class="grid">
+          <thead><tr><th style="width:40px">연번</th><th style="width:120px">이름</th><th>과목 <span class="muted" title="여러 과목은 / 로 구분">(/ 구분)</span></th><th style="width:96px">담임</th><th style="width:112px">구분</th><th style="width:80px">목표시수</th><th style="width:84px">이전 누적</th><th style="width:36px"></th></tr></thead>
+          <tbody>${ts.map((t, i) => `<tr>
+            <td class="idx">${i + 1}</td>
+            <td><input data-bind="teachers.${i}.name" data-tcell="${i},0" value="${esc(t.name)}" class="${dup.has(t.name.trim()) ? 'bad' : ''}" title="${dup.has(t.name.trim()) ? '이름이 중복됩니다' : ''}" placeholder="이름"></td>
+            <td><input class="left" data-bind="teachers.${i}.subject" data-tcell="${i},1" value="${esc(t.subject)}" placeholder="예: 수학 / 정보"></td>
+            <td><input data-bind="teachers.${i}.homeroom" data-tcell="${i},2" value="${esc(t.homeroom)}" placeholder="2-5"></td>
+            <td><select data-bind="teachers.${i}.type" data-tcell="${i},3">${E.TYPES.map((x) => `<option ${x === t.type ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
+            <td><input data-bind="teachers.${i}.target" data-tcell="${i},4" value="${esc(t.target)}" inputmode="numeric" placeholder="${t.type === '원로' ? '필수' : '-'}"></td>
+            <td><input data-bind="teachers.${i}.prev" data-tcell="${i},5" value="${esc(t.prev)}" inputmode="numeric" ${prevOff ? 'style="opacity:.45"' : ''} placeholder="0"></td>
+            <td><button class="icon-btn" data-act="t-del" data-i="${i}" title="삭제">✕</button></td>
+          </tr>`).join('') || '<tr><td colspan="8" class="muted" style="padding:28px">교사 명단이 비어 있습니다. 오른쪽 위 <b>엑셀 파일 불러오기</b> 또는 <b>붙여넣기</b>로 한 번에 넣을 수 있습니다.</td></tr>'}</tbody>
+        </table></div>
+        <p class="muted small" style="margin-top:8px">구분 — <b>일반</b>: 시수를 고르게 · <b>고사담당</b>: 1교시에만 · <b>원로</b>: 교실 감독만, 목표시수까지 · <b>순회</b>: 복도·자습 감독만 · <b>제외</b>: 배정 안 함. 목표시수는 원로에게는 채울 시수, 그 밖에는 넘기지 않을 상한(비우면 제한 없음)입니다.</p>
       </div>
-      <p class="hint" style="margin-top:0">
-        · <b>담임</b>은 <code>2-5</code>처럼, 부장은 <code>3-부장</code>처럼 적습니다. 담임은 본인 반 교실 감독에 들어가지 않습니다.<br>
-        · <b>과목</b>이 시험 과목과 같으면 그 시험 시간에는 감독에서 빠집니다. 여러 과목은 <code>/</code>로 구분합니다. (예: <code>수학</code>은 <code>수학Ⅰ</code>, <code>수학Ⅱ</code> 시험과도 같은 과목으로 봅니다)<br>
-        · <b>구분</b> — 일반: 시수를 고르게 / 고사담당: 1교시에만 / 원로: 교실 감독만, 목표시수까지 / 순회: 복도·자습 감독만 / 제외: 배정 안 함<br>
-        · <b>목표시수</b> — 원로: 이 시수까지 채움(상한). 그 밖의 구분: 적어 두면 이 시수를 넘기지 않도록 함(비우면 제한 없음).<br>
-        · <b>이전 누적</b> — 지난 회차까지의 전체 시수. ${prevOff ? '<b>1차 고사에서는 쓰지 않습니다.</b>' : '이전 회차 결과 엑셀에서 한 번에 불러올 수 있습니다.'} 엑셀에서 불러오면 각 선생님이 들어갔던 교실 이력도 함께 보관합니다${Object.keys(state.roomHistory).length ? ` (지금 ${Object.keys(state.roomHistory).length}명분)` : ''}.
-      </p>
-      <div class="row" style="margin-bottom:10px">
-        <button class="btn" data-act="t-prev-import">📥 이전 회차 결과 엑셀에서 누적 불러오기</button>
-        <button class="btn" data-act="t-prev-clear">누적 비우기</button>
-        <span class="spacer" style="flex:1"></span>
-        <button class="btn danger" data-act="t-clear">명단 전체 삭제</button>
-      </div>
-      <div class="scroll" style="max-height:none">
-      <table class="grid">
-        <thead><tr><th style="width:44px">연번</th><th style="width:110px">이름</th><th>과목</th><th style="width:90px">담임</th><th style="width:110px">구분</th><th style="width:80px">목표시수</th><th style="width:80px">이전 누적</th><th style="width:44px">삭제</th></tr></thead>
-        <tbody>${ts.map((t, i) => `<tr>
-          <td>${i + 1}</td>
-          <td><input data-bind="teachers.${i}.name" data-tcell="${i},0" value="${esc(t.name)}" class="${dup.has(t.name.trim()) ? 'bad' : ''}" title="${dup.has(t.name.trim()) ? '이름이 중복됩니다' : ''}"></td>
-          <td><input data-bind="teachers.${i}.subject" data-tcell="${i},1" value="${esc(t.subject)}"></td>
-          <td><input data-bind="teachers.${i}.homeroom" data-tcell="${i},2" value="${esc(t.homeroom)}" placeholder="-"></td>
-          <td><select data-bind="teachers.${i}.type" data-tcell="${i},3">${E.TYPES.map((x) => `<option ${x === t.type ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
-          <td><input data-bind="teachers.${i}.target" data-tcell="${i},4" value="${esc(t.target)}" inputmode="numeric"></td>
-          <td><input data-bind="teachers.${i}.prev" data-tcell="${i},5" value="${esc(t.prev)}" inputmode="numeric" ${prevOff ? 'style="opacity:.5"' : ''}></td>
-          <td><button class="icon-btn" data-act="t-del" data-i="${i}">✕</button></td>
-        </tr>`).join('') || '<tr><td colspan="8" class="muted" style="padding:20px">교사 명단이 비어 있습니다. [엑셀 파일 불러오기] 또는 [붙여넣기]로 한 번에 넣을 수 있습니다.</td></tr>'}</tbody>
-      </table></div>
-    </div>`;
+    </div>
+    ${stepNav('teachers')}`;
   };
 
   function applyTeacherGrid(rows, startRow, startCol) {
@@ -456,42 +538,46 @@
     const names = new Set(state.teachers.map((t) => t.name.trim()).filter(Boolean));
     const bad = (n) => n.trim() && !names.has(n.trim());
     $('#tab-extras').innerHTML = `
+    ${guide(['특수학급 등 시험 기간 내내 따로 자리를 지키는 선생님을 <b>특수실</b>에 적습니다.', '출장·연가·수업으로 특정 교시에 감독할 수 없는 선생님을 일차별 <b>예외</b>에 적습니다. 종일이면 교시를 "종일"로 고릅니다.', '해당 사항이 없으면 그대로 다음 단계로 넘어가도 됩니다.'], 's4')}
     <div class="grid-2">
       <div class="panel">
-        <div class="panel-head"><h2>🏠 특수실</h2><span class="spacer"></span><button class="btn" data-act="sp-add">➕ 추가</button></div>
-        <p class="hint" style="margin-top:0">지정자는 시험 기간 동안 일반 감독에서 빠지고, 결과에 "특수(명칭)"으로 표시됩니다. 시수는 그 선생님의 이번 회차 시수에 더해집니다.</p>
+        ${panelHead('특수실', 's4-special', '지정자는 일반 감독에서 빠지고, 적은 시수가 그 선생님 시수에 더해집니다.', '<button class="btn sm" data-act="sp-add">+ 추가</button>')}
+        <div class="panel-body flush">
         <table class="grid">
-          <thead><tr><th>명칭</th><th>지정자</th><th style="width:80px">시수</th><th style="width:44px">삭제</th></tr></thead>
+          <thead><tr><th>명칭</th><th>지정자</th><th style="width:80px">시수</th><th style="width:36px"></th></tr></thead>
           <tbody>${state.specials.map((r, i) => `<tr>
-            <td><input data-bind="specials.${i}.room" value="${esc(r.room)}" placeholder="특수학급"></td>
-            <td><input data-bind="specials.${i}.teacher" data-namecheck value="${esc(r.teacher)}" list="teacherNames" class="${bad(r.teacher) ? 'bad' : ''}"></td>
-            <td><input data-bind="specials.${i}.hours" value="${esc(r.hours)}" inputmode="numeric"></td>
+            <td><input data-bind="specials.${i}.room" value="${esc(r.room)}" placeholder="예: 특수학급"></td>
+            <td><input data-bind="specials.${i}.teacher" data-namecheck value="${esc(r.teacher)}" list="teacherNames" class="${bad(r.teacher) ? 'bad' : ''}" placeholder="명단에서 선택"></td>
+            <td><input data-bind="specials.${i}.hours" value="${esc(r.hours)}" inputmode="numeric" placeholder="0"></td>
             <td><button class="icon-btn" data-act="sp-del" data-i="${i}">✕</button></td>
-          </tr>`).join('')}</tbody>
+          </tr>`).join('') || '<tr><td colspan="4" class="muted" style="padding:16px">특수실 없음</td></tr>'}</tbody>
         </table>
+        </div>
       </div>
 
       <div class="panel">
-        <div class="panel-head"><h2>⚠️ 일차·교시별 예외 감독자</h2></div>
-        <p class="hint" style="margin-top:0">출장·연가·수업 등으로 그 교시에 감독할 수 없는 선생님을 적습니다. 이름은 명단에서 고르세요(명단에 없는 이름은 빨갛게 표시되고 적용되지 않습니다). 교시를 <b>전체</b>로 하면 그날 하루 종일 빠집니다.</p>
+        ${panelHead('일차·교시별 예외 감독자', 's4-exceptions', '명단에 없는 이름은 빨갛게 표시되고 적용되지 않습니다.')}
+        <div class="panel-body">
         ${state.days.map((day, d) => `
           <div class="day-card">
-            <h3 style="display:flex;align-items:center">${d + 1}일차 ${day.date ? '· ' + esc(day.date) : ''}<span style="flex:1"></span><button class="btn sm" data-act="ex-add" data-d="${d}">➕ 추가</button></h3>
-            <table class="grid" style="border:none">
-              ${day.exceptions.length ? `<thead><tr><th style="width:120px">교시</th><th>이름</th><th>사유</th><th style="width:44px">삭제</th></tr></thead>` : ''}
+            <div class="day-head"><h3>${d + 1}일차</h3><span class="muted">${esc(day.date) || ''}</span><span class="spacer"></span><button class="btn sm" data-act="ex-add" data-d="${d}">+ 추가</button></div>
+            <table class="grid">
+              ${day.exceptions.length ? `<thead><tr><th style="width:120px">교시</th><th>이름</th><th>사유</th><th style="width:36px"></th></tr></thead>` : ''}
               <tbody>${day.exceptions.map((x, i) => {
                 const pv = E.parsePeriodValue(x.period);
-                const opts = ['<option value="">선택</option>'].concat(range(1, day.periods).map((p) => `<option value="${p}" ${pv === p ? 'selected' : ''}>${p}교시</option>`), [`<option value="전체" ${pv === 'all' ? 'selected' : ''}>종일</option>`]);
+                const opts = ['<option value="">교시 선택</option>'].concat(range(1, day.periods).map((p) => `<option value="${p}" ${pv === p ? 'selected' : ''}>${p}교시</option>`), [`<option value="전체" ${pv === 'all' ? 'selected' : ''}>종일</option>`]);
                 return `<tr>
                 <td><select data-bind="days.${d}.exceptions.${i}.period">${opts.join('')}</select></td>
-                <td><input data-bind="days.${d}.exceptions.${i}.name" data-namecheck value="${esc(x.name)}" list="teacherNames" class="${bad(x.name) ? 'bad' : ''}"></td>
-                <td><input data-bind="days.${d}.exceptions.${i}.reason" value="${esc(x.reason)}" placeholder="출장 등"></td>
+                <td><input data-bind="days.${d}.exceptions.${i}.name" data-namecheck value="${esc(x.name)}" list="teacherNames" class="${bad(x.name) ? 'bad' : ''}" placeholder="명단에서 선택"></td>
+                <td><input class="left" data-bind="days.${d}.exceptions.${i}.reason" value="${esc(x.reason)}" placeholder="출장, 연가 등"></td>
                 <td><button class="icon-btn" data-act="ex-del" data-d="${d}" data-i="${i}">✕</button></td></tr>`;
-              }).join('') || '<tr><td class="muted" style="border:none;padding:10px">예외 없음</td></tr>'}</tbody>
+              }).join('') || '<tr><td class="muted" style="padding:10px 12px; text-align:left; height:auto">예외 없음</td></tr>'}</tbody>
             </table>
           </div>`).join('')}
+        </div>
       </div>
-    </div>`;
+    </div>
+    ${stepNav('extras')}`;
   };
 
   // ---------------------------------------------------------------
@@ -502,6 +588,18 @@
 
   function currentModel() { return E.buildModel(state); }
 
+  function issuesHTML(issues) {
+    if (!issues.length) return '<p class="muted small" style="margin:0">확인할 문제가 없습니다.</p>';
+    const by = { error: [], warn: [], info: [] };
+    issues.forEach((i) => by[i.level].push(i));
+    const list = (arr) => `<ul class="issues">${arr.map((i) => `<li class="${i.level}">${esc(i.msg)}</li>`).join('')}</ul>`;
+    let h = '';
+    if (by.error.length) h += `<div style="margin-bottom:6px"><div class="small bad-text" style="font-weight:700;margin-bottom:4px">반드시 해결 ${by.error.length}건 — 해결 전에는 배정할 수 없습니다</div>${list(by.error)}</div>`;
+    if (by.warn.length) h += `<details class="issue-group" ${by.error.length ? '' : 'open'}><summary>주의 ${by.warn.length}건 <span class="muted small" style="font-weight:400">— 배정은 되지만 결과에 영향을 줄 수 있습니다</span></summary>${list(by.warn)}</details>`;
+    if (by.info.length) h += `<details class="issue-group"><summary>참고 ${by.info.length}건</summary>${list(by.info)}</details>`;
+    return h;
+  }
+
   renderers.result = function () {
     const model = currentModel();
     const r = state.result;
@@ -510,49 +608,63 @@
     const stale = r && r.sig !== E.inputSignature(state);
     const pinCount = r ? Object.keys(r.pinned || {}).length : 0;
 
-    const issuesHTML = model.issues.length
-      ? `<ul class="issues">${model.issues.map((i) => `<li class="${i.level}">${esc(i.msg)}</li>`).join('')}</ul>`
-      : '<p class="muted" style="margin:0">✔ 확인할 문제가 없습니다.</p>';
-
     let body = '';
     if (running) {
-      body = `<div class="panel"><b>⏳ 배정 계산 중…</b> 수십만 가지 조합을 비교하고 있습니다.<div class="progress"><div id="prog" style="width:${Math.round(progress * 100)}%"></div></div></div>`;
+      body = `<div class="panel"><div class="panel-body"><b>배정 계산 중…</b> <span class="muted">수십만 가지 조합을 비교하고 있습니다. 보통 1~3초 걸립니다.</span><div class="progress"><div id="prog" style="width:${Math.round(progress * 100)}%"></div></div></div></div>`;
     } else if (r && ev) {
       const s = ev.summary;
       body = `
-      ${stale ? `<div class="panel" style="border-color:var(--warn);background:var(--warn-soft)">⚠ 배정한 뒤에 입력(과목·교사·예외 등)이 바뀌었습니다. 아래 결과는 바뀐 입력으로 다시 검사한 것입니다. <b>[다시 돌리기]</b>를 누르면 직접 고친 칸은 유지하고 나머지를 새로 배정합니다.</div>` : ''}
+      ${stale ? `<div class="guide" style="background:var(--warn-soft);border-color:#f3d9a8;color:var(--warn)"><b>입력이 바뀜</b><span>배정한 뒤에 과목·교사·예외 등이 바뀌었습니다. 아래 결과는 바뀐 입력으로 다시 검사한 것입니다. <b>다시 돌리기</b>를 누르면 직접 고친 칸은 유지하고 나머지를 새로 배정합니다.</span></div>` : ''}
       <div class="summary">
         <div class="stat ${s.shortage ? 'bad' : 'ok'}"><b>${s.shortage}</b><span>감독 부족 자리</span></div>
-        <div class="stat ${s.violations ? 'bad' : 'ok'}"><b>${s.violations}</b><span>규칙 위반 칸 ⚠</span></div>
-        <div class="stat"><b>${s.min} ~ ${s.max}</b><span>일반 교사 전체 누적 시수</span></div>
-        <div class="stat"><b>${s.avg.toFixed(1)}</b><span>일반 교사 평균</span></div>
+        <div class="stat ${s.violations ? 'bad' : 'ok'}"><b>${s.violations}</b><span>규칙 위반 칸</span></div>
+        <div class="stat"><b>${s.min} ~ ${s.max}</b><span>일반 교사 누적 시수 범위</span></div>
+        <div class="stat"><b>${s.avg.toFixed(1)}</b><span>일반 교사 평균 누적</span></div>
         <div class="stat ${s.repeatRooms && model.noRepeatRoom ? 'bad' : ''}"><b>${s.repeatRooms}</b><span>같은 교실 중복</span></div>
         <div class="stat"><b>${pinCount}</b><span>직접 고친 칸 📌</span></div>
       </div>
-      <p class="hint">칸을 누르면 다른 선생님으로 바꾸거나 맞바꿀 수 있습니다. 직접 고친 칸은 📌로 고정되어, [다시 돌리기]를 해도 그대로 남습니다. 노란색=자습, 보라색=복도, 파란색=본인 시험, ⚠=규칙 위반(마우스를 올리면 이유).</p>
-      <div class="subtabs no-print">
-        ${[['grid', '감독표'], ['person', '개인별 시간표'], ['stats', '시수표']].map(([k, l]) => `<button class="subtab ${ui.sub === k ? 'active' : ''}" data-act="sub" data-k="${k}">${l}</button>`).join('')}
-      </div>
-      <div class="scroll">${ui.sub === 'person' ? personTable(model, ev) : ui.sub === 'stats' ? statsTable(model, ev) : gridTable(model, ev)}</div>`;
+      <div class="panel">
+        <div class="panel-head">
+          <div class="seg">${[['grid', '감독표'], ['person', '개인별 시간표'], ['stats', '시수표']].map(([k, l]) => `<button class="${ui.sub === k ? 'active' : ''}" data-act="sub" data-k="${k}">${l}</button>`).join('')}</div>
+          <span class="legend-row" style="padding:0">
+            <span class="legend"><i style="background:#fff4c2"></i>자습</span>
+            <span class="legend"><i style="background:#ece8fb"></i>복도</span>
+            <span class="legend"><i style="background:#dbeafe"></i>본인 시험</span>
+            <span class="legend"><i style="background:#fce7f3"></i>예비</span>
+            <span class="legend"><i style="background:#fef2f2;border-color:#f1b0b0"></i>부족</span>
+            <span class="muted">⚠ 규칙 위반(마우스를 올리면 이유) · 📌 직접 고친 칸</span>
+          </span>
+          <span class="spacer"></span>
+          <span class="muted small">칸을 누르면 바꾸거나 맞바꿀 수 있습니다</span>
+          ${helpDot('s5-edit')}
+        </div>
+        <div class="panel-body" style="padding:8px">
+          <div class="scroll">${ui.sub === 'person' ? personTable(model, ev) : ui.sub === 'stats' ? statsTable(model, ev) : gridTable(model, ev)}</div>
+        </div>
+      </div>`;
     }
 
     $('#tab-result').innerHTML = `
-    <div class="panel no-print">
+    ${r ? '' : guide(['아래 <b>배정 전 점검</b>에서 빨간 항목이 있으면 먼저 해결합니다. 노란 항목은 참고용입니다.', '<b>배정 시작</b>을 누르면 1~3초 뒤 결과가 나옵니다.', '결과 칸을 눌러 직접 바꿀 수 있고, 고친 칸은 📌로 고정되어 다시 돌려도 유지됩니다.'], 's5')}
+    <div class="panel actionbar no-print">
       <div class="panel-head">
-        <h2>🚀 배정 (${esc(state.term)})</h2><span class="spacer"></span>
-        <button class="btn go" data-act="run" ${running || errs.length ? 'disabled' : ''}>${r ? '🆕 처음부터 새로 배정' : '🚀 배정 시작'}</button>
-        ${r ? `<button class="btn orange" data-act="rerun" ${running || errs.length ? 'disabled' : ''} title="📌 고친 칸은 그대로 두고 나머지를 다시 배정">🔄 다시 돌리기 (📌 유지)</button>
-        <button class="btn primary" data-act="export" ${running ? 'disabled' : ''}>💾 엑셀로 저장</button>` : ''}
+        <h2>배정 · ${esc(state.term)}</h2>${helpDot('s5')}
+        ${r ? `<span class="muted small">배정 ${timeText(r.createdAt)}</span>` : ''}
+        <span class="spacer"></span>
+        ${r ? `${pinCount ? `<button class="btn sm ghost" data-act="unpin-all">📌 고정 모두 풀기</button>` : ''}
+        <button class="btn sm ghost danger" data-act="clear-result">결과 지우기</button>
+        <button class="btn" data-act="apply-cum" title="이번 결과 시수를 이전 누적에 더하고 다음 회차로 넘어갑니다">누적 반영 → 다음 회차</button>
+        <button class="btn orange" data-act="rerun" ${running || errs.length ? 'disabled' : ''} title="📌 고친 칸은 그대로 두고 나머지를 다시 배정">다시 돌리기 (📌 유지)</button>
+        <button class="btn" data-act="run" ${running || errs.length ? 'disabled' : ''}>처음부터 새로 배정</button>
+        <button class="btn primary" data-act="export" ${running ? 'disabled' : ''}>엑셀로 저장</button>`
+        : `<button class="btn go" data-act="run" ${running || errs.length ? 'disabled' : ''} style="min-width:140px">배정 시작</button>`}
       </div>
-      <details ${r ? '' : 'open'}><summary style="cursor:pointer;font-weight:600">배정 전 점검 (${model.issues.length}건)</summary><div style="margin-top:8px">${issuesHTML}</div></details>
-      ${r ? `<div class="row" style="margin-top:12px">
-        ${pinCount ? `<button class="btn sm" data-act="unpin-all">📌 고정 모두 풀기</button>` : ''}
-        <button class="btn sm" data-act="apply-cum" title="이번 결과 시수를 이전 누적에 더하고 다음 회차로 넘어갑니다">➡ 이번 시수를 누적에 반영하고 다음 회차 준비</button>
-        <button class="btn sm danger" data-act="clear-result">결과 지우기</button>
-        <span class="muted">배정: ${timeText(r.createdAt)}</span>
-      </div>` : ''}
+      <div class="panel-body" style="padding-top:8px">
+        <details class="issue-group" ${r && !errs.length ? '' : 'open'}><summary>배정 전 점검 (${model.issues.length}건)${errs.length ? ` <span class="badge bad">해결 필요 ${errs.length}</span>` : ''}</summary><div style="margin-top:6px">${issuesHTML(model.issues)}</div></details>
+      </div>
     </div>
-    ${body}`;
+    ${body}
+    ${stepNav('result')}`;
   };
 
   function slotCell(model, ev, s) {
@@ -568,14 +680,14 @@
   function gridTable(model, ev) {
     const C = model.maxClasses, K = model.corridors;
     const hasSp = model.slots.some((s) => s.kind === 'special');
-    let h = `<table class="res"><thead><tr><th>일차</th><th>교시</th><th>학년</th><th>과목</th>${range(1, C).map((c) => `<th>${c}반</th>`).join('')}${hasSp ? '<th>추가반</th>' : ''}${range(1, K).map((k) => `<th>복도${k}</th>`).join('')}<th>예비(누적 적은 순)</th></tr></thead><tbody>`;
+    let h = `<table class="res"><thead><tr><th>일차</th><th>교시</th><th>학년</th><th>과목</th>${range(1, C).map((c) => `<th>${c}반</th>`).join('')}${hasSp ? '<th>추가반</th>' : ''}${range(1, K).map((k) => `<th>복도${k}</th>`).join('')}<th>예비 (누적 적은 순)</th></tr></thead><tbody>`;
     let last = -1;
     model.periods.forEach((per) => {
       if (last !== -1 && last !== per.d) h += `<tr class="day-sep"><td colspan="${6 + C + K + (hasSp ? 1 : 0)}"></td></tr>`;
       last = per.d;
       per.grades.forEach((gi, idx) => {
         h += '<tr>';
-        if (idx === 0) h += `<td rowspan="3"><b>${per.dayLabel}</b><br><small>${esc(per.date)}</small></td><td rowspan="3">${per.p}교시</td>`;
+        if (idx === 0) h += `<td rowspan="3"><b>${per.dayLabel}</b><br><small class="muted">${esc(per.date)}</small></td><td rowspan="3">${per.p}교시</td>`;
         h += `<td>${gi.grade}학년</td><td class="subjcol ${gi.parsed.allStudy || gi.parsed.study.length ? 'study' : ''}">${esc(gi.label) || '<span class="muted">시험 없음</span>'}</td>`;
         for (let c = 1; c <= C; c++) {
           const s = model.slotById.get(`${per.d}-${per.p}-${gi.grade}-c${c}`);
@@ -675,17 +787,12 @@
     running = false;
     save();
     renderers.result();
+    updateBadges();
     const ev = E.evaluate(model, res.assign);
     toast(`배정 완료 (${((performance.now() - t0) / 1000).toFixed(1)}초) · 부족 ${ev.summary.shortage} · 위반 ${ev.summary.violations}`);
   }
 
   // ---- 칸 편집: 교사 후보 목록
-  function teacherLoad(model, ev) {
-    const m = new Map();
-    ev.stats.forEach((st) => m.set(st.name, st));
-    return m;
-  }
-
   function wouldBe3Consecutive(model, name, slot) {
     const days = model.periods.filter((p) => p.d === slot.d);
     const has = new Set();
@@ -697,9 +804,9 @@
   }
 
   function candidateHTML(model, ev, slot) {
-    const load = teacherLoad(model, ev);
+    const load = new Map(ev.stats.map((st) => [st.name, st]));
     const cur = state.result.assign[slot.id] || '';
-    const sameP = new Map(); // 같은 교시에 이미 배정된 교사 → slotId
+    const sameP = new Map();
     model.slots.forEach((s) => { if (s.pi === slot.pi && state.result.assign[s.id]) sameP.set(state.result.assign[s.id], s.id); });
     const free = [], swap = [], no = [];
     model.teachers.forEach((t) => {
@@ -729,9 +836,9 @@
     };
     return `
       <input type="search" id="candSearch" placeholder="이름 검색" style="width:100%;margin-bottom:10px">
-      <div class="cand-group"><h4>✅ 바로 넣을 수 있는 선생님 (누적 적은 순)</h4><div class="cand-list">${free.map((x) => btn(x, 'free')).join('') || '<span class="muted">없음</span>'}</div></div>
-      <div class="cand-group"><h4>🔁 같은 교시 다른 자리와 맞바꾸기</h4><div class="cand-list">${swap.map((x) => btn(x, 'swap')).join('') || '<span class="muted">없음</span>'}</div></div>
-      <details class="cand-group"><summary style="cursor:pointer;font-weight:600;color:var(--ink-2)">⛔ 규칙상 어려운 선생님 (${no.length}명) — 그래도 넣을 수는 있습니다</summary><div class="cand-list" style="margin-top:6px">${no.map((x) => btn(x, 'no')).join('')}</div></details>`;
+      <div class="cand-group"><h4>바로 넣을 수 있는 선생님 (누적 적은 순)</h4><div class="cand-list">${free.map((x) => btn(x, 'free')).join('') || '<span class="muted">없음</span>'}</div></div>
+      <div class="cand-group"><h4>같은 교시 다른 자리와 맞바꾸기</h4><div class="cand-list">${swap.map((x) => btn(x, 'swap')).join('') || '<span class="muted">없음</span>'}</div></div>
+      <details class="cand-group"><summary style="cursor:pointer;font-weight:600;color:var(--ink-2)">규칙상 어려운 선생님 ${no.length}명 — 그래도 넣을 수는 있습니다</summary><div class="cand-list" style="margin-top:6px">${no.map((x) => btn(x, 'no')).join('')}</div></details>`;
   }
 
   async function openSlotEditor(slotId) {
@@ -744,8 +851,8 @@
     const cur = state.result.assign[slotId] || '';
     const place = slot.kind === 'class' ? `${slot.grade}학년 ${slot.classNo}반` : slot.kind === 'special' ? `${slot.grade}학년 ${slot.room}` : `${slot.grade}학년 복도${slot.col.slice(1)}`;
     const v = ev.violations[slotId];
-    const html = `<p style="margin-top:0">${per.dayLabel} ${esc(per.date)} ${per.p}교시 · <b>${place}</b> · ${esc(gi.label)}${slot.study ? ' <span class="badge warn">자습</span>' : ''}<br>
-      현재: <b>${cur ? esc(cur) : '<span style="color:var(--bad)">비어 있음</span>'}</b> ${state.result.pinned[slotId] ? '📌' : ''} ${v ? `<span class="badge bad">⚠ ${esc(v.join(', '))}</span>` : ''}</p>
+    const html = `<p>${per.dayLabel} ${esc(per.date)} ${per.p}교시 · <b>${place}</b> · ${esc(gi.label)}${slot.study ? ' <span class="badge warn">자습</span>' : ''}<br>
+      현재: <b>${cur ? esc(cur) : '<span class="bad-text">비어 있음</span>'}</b> ${state.result.pinned[slotId] ? '📌' : ''} ${v ? `<span class="badge bad">⚠ ${esc(v.join(', '))}</span>` : ''}</p>
       ${candidateHTML(model, ev, slot)}`;
     const result = await dialog({
       title: '감독 바꾸기', html, wide: true,
@@ -776,7 +883,6 @@
     if (result.act === 'clear') { a[slotId] = ''; pin[slotId] = true; }
     else if (result.act === 'unpin') { delete pin[slotId]; }
     else if (result.act === 'set') {
-      // 같은 교시 다른 자리에 이미 있으면(규칙상 어려움 목록에서 고른 경우) 그 자리는 비움
       model.slots.forEach((s) => { if (s.pi === slot.pi && s.id !== slotId && a[s.id] === result.name) { a[s.id] = ''; pin[s.id] = true; } });
       a[slotId] = result.name; pin[slotId] = true;
     } else if (result.act === 'swap') {
@@ -787,7 +893,6 @@
     renderers.result();
   }
 
-  // 개인별 시간표 칸 클릭
   async function openPersonCell(name, pi) {
     const model = currentModel();
     const ids = model.slots.filter((s) => s.pi === pi && state.result.assign[s.id] === name).map((s) => s.id);
@@ -796,7 +901,7 @@
     if (!t) return;
     const per = model.periods[pi];
     const slots = model.slots.filter((s) => s.pi === pi);
-    const html = `<p style="margin-top:0"><b>${esc(name)}</b> 선생님을 ${per.dayLabel} ${per.p}교시에 넣을 자리를 고르세요. 원래 그 자리에 있던 선생님은 빠집니다.</p>
+    const html = `<p><b>${esc(name)}</b> 선생님을 ${per.dayLabel} ${per.p}교시에 넣을 자리를 고르세요. 원래 그 자리에 있던 선생님은 빠집니다.</p>
       <div class="cand-list">${slots.map((s) => {
         const r = E.slotReasons(model, t, s);
         if (wouldBe3Consecutive(model, name, s)) r.push('3교시 연속');
@@ -825,6 +930,7 @@
     try {
       const blob = await X.exportResult(state, model, ev, state.result.assign);
       download(blob, `부광고_${state.term.replace(/\s/g, '')}_배정결과.xlsx`);
+      toast('엑셀 파일을 저장했습니다. (결과_감독표 · 결과_시수표 · 결과_개인별시간표)');
     } catch (e) {
       console.error(e);
       await dialog({ title: '오류', html: `<p>엑셀 저장 중 문제가 생겼습니다.</p><pre>${esc(e.message)}</pre>` });
@@ -844,7 +950,7 @@
       if (!st) return;
       t.prev = String(st.prev + st.total);
     });
-    if (state.term === TERMS[0]) state.roomHistory = {}; // 새 학년도 시작
+    if (state.term === TERMS[0]) state.roomHistory = {};
     model.slots.forEach((s) => {
       const nm = state.result.assign[s.id], k = E.roomKey(s);
       if (!nm || !k) return;
@@ -869,6 +975,7 @@
     download(blob, `부광고_시험감독_백업_${state.term.replace(/\s/g, '')}_${stamp(now)}.json`);
     save(false);
     renderAll();
+    toast('백업 파일을 저장했습니다.');
   }
 
   async function backupLoad() {
@@ -891,54 +998,204 @@
   }
 
   // ---------------------------------------------------------------
+  // 처음 안내
+  // ---------------------------------------------------------------
+  async function showIntro() {
+    const v = await dialog({
+      title: '시작하기', wide: true,
+      html: `<p>위쪽 <b>1 → 5 단계</b>를 차례로 진행하면 됩니다. 각 단계 아래의 <b>다음 단계</b> 버튼으로 이동하고, 궁금한 부분은 <b>?</b> 표시나 상단 <b>설명서</b>를 누르세요.</p>
+      <div class="intro-steps">
+        <div class="intro-step"><b><span class="n">1</span>기본 설정</b><small>회차, 반 수, 시험 일차·교시</small></div>
+        <div class="intro-step"><b><span class="n">2</span>시험 과목</b><small>교시별 과목, 자습·제외 반, 추가반</small></div>
+        <div class="intro-step"><b><span class="n">3</span>교사 명단</b><small>엑셀 불러오기, 담임·구분, 이전 누적</small></div>
+        <div class="intro-step"><b><span class="n">4</span>특수실 · 예외</b><small>특수실 담당, 교시별 예외 감독자</small></div>
+        <div class="intro-step"><b><span class="n">5</span>배정 결과</b><small>배정 → 직접 수정 → 엑셀 저장 → 누적 반영</small></div>
+      </div>
+      <p class="muted small" style="margin-top:10px">입력하는 즉시 이 브라우저에 저장됩니다. 다른 컴퓨터에서도 쓰려면 <b>백업 저장</b>으로 파일을 받아 두세요. 예전 프로그램의 백업 파일이 있다면 <b>백업 불러오기</b>로 그대로 이어서 쓸 수 있습니다.</p>`,
+      buttons: [{ label: '설명서 보기', value: 'help' }, { label: '예전 백업 불러오기', value: 'load' }, { label: '시작하기', value: 'go', cls: 'primary' }],
+    });
+    ui.seenIntro = true; saveUI();
+    if (v === 'help') showHelp('s0');
+    else if (v === 'load') backupLoad();
+  }
+
+  // ---------------------------------------------------------------
   // 설명서
   // ---------------------------------------------------------------
-  function showHelp() {
+  function helpHTML() {
+    const swatch = (c) => `<span class="sw" style="background:${c}"></span>`;
+    return `<div class="help-layout">
+    <nav class="help-toc">
+      <a href="#s0">시작하기</a>
+      <a href="#s0-backup" class="sub">자료 보관과 백업</a>
+      <a href="#s0-flow" class="sub">한 해 운영 흐름</a>
+      <a href="#s1">1. 기본 설정</a>
+      <a href="#s1-options" class="sub">옵션 설명</a>
+      <a href="#s1-days" class="sub">반 수·일차·교시</a>
+      <a href="#s2">2. 시험 과목</a>
+      <a href="#s2-paste" class="sub">엑셀에서 붙여넣기</a>
+      <a href="#s3">3. 교사 명단</a>
+      <a href="#s3-type" class="sub">구분과 목표시수</a>
+      <a href="#s3-excel" class="sub">엑셀 양식</a>
+      <a href="#s4">4. 특수실 · 예외</a>
+      <a href="#s5">5. 배정 결과</a>
+      <a href="#s5-edit" class="sub">결과 직접 수정</a>
+      <a href="#s5-excel" class="sub">엑셀 파일 구성</a>
+      <a href="#rules">배정 규칙과 원리</a>
+      <a href="#faq">자주 묻는 질문</a>
+    </nav>
+    <div class="help">
+      <h2 id="s0">시작하기</h2>
+      <p>이 프로그램은 시험 감독을 <b>규칙을 지키면서 시수가 고르게</b> 배정하고, 결과를 엑셀로 내보냅니다. 설치 없이 링크로 열며, 서버 없이 이 브라우저 안에서만 동작합니다.</p>
+      <ol>
+        <li><b>1. 기본 설정</b> — 회차, 반 수, 시험 일차와 교시 수</li>
+        <li><b>2. 시험 과목</b> — 교시별 학년 과목, 자습·제외 반, 추가반</li>
+        <li><b>3. 교사 명단</b> — 이름·과목·담임·구분·목표시수·이전 누적</li>
+        <li><b>4. 특수실 · 예외</b> — 특수실 담당자, 교시별로 감독이 어려운 선생님</li>
+        <li><b>5. 배정 결과</b> — 배정 실행, 결과 수정, 엑셀 저장, 다음 회차 준비</li>
+      </ol>
+      <p>화면 위쪽의 단계 표시에는 각 단계의 입력 상태가 함께 보입니다. 단계는 순서대로 하지 않아도 되지만, 2단계와 4단계의 칸 수는 1단계의 일차·교시 수에 따라 자동으로 바뀝니다.</p>
+
+      <h3 id="s0-backup">자료 보관과 백업</h3>
+      <ul>
+        <li>입력하는 즉시 <b>이 컴퓨터의 이 브라우저</b>에 자동 저장됩니다. 상단에 "자동 저장됨" 시각이 보입니다. 같은 컴퓨터·같은 브라우저로 다시 열면 그대로 이어집니다.</li>
+        <li>다른 컴퓨터에서 쓰거나 브라우저 기록을 지울 때를 대비해 <b>백업 저장</b>(상단 오른쪽)으로 파일(.json) 하나를 받아 두세요. 설정·과목·교사·예외·배정 결과(직접 고친 칸 포함)가 모두 들어 있습니다.</li>
+        <li><b>백업 불러오기</b>로 그 파일을 열면 화면이 그대로 복원됩니다. 예전 파이썬 프로그램의 DATA SAVE 파일(.json)도 불러올 수 있으며, 과목명 뒤의 <code>*(장소)</code> 표기는 추가반 버튼으로 자동 변환됩니다.</li>
+        <li>백업 버튼의 노란 점(●)은 마지막 백업 이후 바뀐 내용이 있다는 표시입니다.</li>
+        <li>시크릿 창(비공개 창)이나 브라우저 설정에 따라 자동 저장이 안 될 수 있습니다. 이때는 상단에 경고가 나타나니 백업 파일로 보관하세요.</li>
+      </ul>
+
+      <h3 id="s0-flow">한 해 운영 흐름</h3>
+      <table>
+        <tr><th>시기</th><th>할 일</th></tr>
+        <tr><td>1차 고사</td><td>회차를 <b>1차 고사</b>로 두고 처음부터 입력합니다. 이전 누적은 쓰지 않습니다.</td></tr>
+        <tr><td>2·3차 고사</td><td>두 가지 방법 중 하나로 누적을 이어갑니다. ① 지난 결과 화면에서 <b>누적 반영 → 다음 회차</b>를 누르면 누적과 교실 이력이 자동으로 넘어갑니다. ② 또는 3단계에서 <b>이전 회차 결과 엑셀에서 누적 불러오기</b>로 지난 엑셀 파일을 읽습니다. 그다음 과목·일차·예외만 새 시험에 맞게 고칩니다.</td></tr>
+        <tr><td>4차 고사</td><td>3학년은 보통 시험을 보지 않으므로 3학년 과목 칸을 비워 둡니다(감독 없음). <b>3학년 담임·부장 제외</b> 옵션이 켜져 있으면 이분들은 배정에서 빠지며, 시수는 3차까지의 누적을 기준으로 봅니다.</td></tr>
+        <tr><td>새 학년도</td><td>1차 고사로 바꾸면 누적과 교실 이력을 쓰지 않습니다. 명단만 고쳐서 다시 시작하거나, <b>전체 초기화</b> 후 새로 입력합니다.</td></tr>
+      </table>
+
+      <h2 id="s1">1. 기본 설정</h2>
+      <h3 id="s1-options">옵션 설명</h3>
+      <table>
+        <tr><th>옵션</th><th>설명</th><th>권장</th></tr>
+        <tr><td>배정 회차</td><td>1차~4차. 2차부터는 교사 명단의 "이전 누적"을 더해 누적이 적은 선생님께 더 배정합니다.</td><td>해당 회차</td></tr>
+        <tr><td>학년별 복도 감독 수</td><td>교시마다 학년별로 두는 복도 감독 인원. 0이면 복도 감독 없음.</td><td>2</td></tr>
+        <tr><td>4차: 3학년 담임·부장 제외</td><td>4차 고사에서만 보입니다. 담임 칸이 <code>3-</code>로 시작하는 선생님(3-1 … 3-부장)을 배정에서 뺍니다.</td><td>켬</td></tr>
+        <tr><td>전체 자습 교시에도 교실 감독</td><td>학년 전체가 자습인 교시에 교실마다 감독을 넣을지. 끄면 복도 감독만 둡니다.</td><td>학교 방침대로</td></tr>
+        <tr><td>같은 교실에 두 번 넣지 않음</td><td>한 선생님을 같은 학년-반 교실에 다시 넣지 않습니다. <b>이번 시험 안에서</b> 또는 <b>올해 이전 회차까지</b>(이전 결과 엑셀에서 불러온 교실 이력 포함) 중 고릅니다. 교사 한 명이 한 시험에 교실 3~4번 들어가고 교실은 20개가 넘어, 켜도 부족 자리가 생기지 않습니다.</td><td>켬</td></tr>
+        <tr><td>3학년 담임 연간 보정 (고급)</td><td>4차에 빠지는 3학년 담임은 3차까지의 평균에 맞추는 것이 원칙이므로 <b>0</b>으로 둡니다. 연말 합계까지 맞추고 싶을 때만 1을 넣으면 1~3차에서 회차당 1시간씩 더 배정합니다.</td><td>0</td></tr>
+      </table>
+      <h3 id="s1-days">반 수 · 일차 · 교시</h3>
+      <ul>
+        <li><b>학년별 반 수</b>를 바꾸면 2단계의 자습/제외 번호 버튼 개수가 바로 바뀝니다. 이미 입력한 과목은 그대로 남습니다.</li>
+        <li><b>+ 일차 추가</b>로 시험 날짜를 늘리고, 날짜(예: 4/27)와 그날의 <b>교시 수</b>를 적습니다. 교시 수를 줄여도 입력했던 과목은 지워지지 않고 숨겨지므로, 다시 늘리면 되살아납니다.</li>
+        <li>일차를 삭제하면 그날의 과목과 예외 입력도 함께 지워집니다(확인 창이 뜹니다).</li>
+      </ul>
+
+      <h2 id="s2">2. 시험 과목</h2>
+      <p>일차별 표에서 교시마다 1·2·3학년의 시험 과목을 적습니다. 칸 하나는 다음으로 이루어집니다.</p>
+      <table>
+        <tr><th>항목</th><th>설명</th></tr>
+        <tr><td>과목명</td><td>그 교시 그 학년의 시험 과목. <b>비워 두면 "시험 없음"</b>으로 보고 감독을 넣지 않습니다. <code>자습</code>이라고 적으면 학년 전체 자습입니다. 여러 과목이 같은 시간에 치러지면 <code>세계사/화학</code>처럼 <code>/</code>로 적습니다(두 과목 교사 모두 그 시간 감독에서 빠집니다).</td></tr>
+        <tr><td>+ 추가반</td><td>이동수업 등으로 교실이 하나 더 필요할 때 누릅니다. 옆에 나타나는 칸에 장소(예: 음악실)를 적으면 결과와 엑셀에 그 이름이 들어가고, 비우면 "8반"처럼 마지막 반 다음 번호가 됩니다.</td></tr>
+        <tr><td>자습 번호</td><td>${swatch('#ffe58a')}그 반이 자습임을 표시합니다. 자습 교실 감독은 "자습 시수"로 따로 셉니다. <b>전</b>을 누르면 모든 반을 한 번에 켜고 끕니다.</td></tr>
+        <tr><td>제외 번호</td><td>${swatch('#ffc9c9')}그 반에는 감독을 넣지 않습니다(예: 그 반 학생 전원이 다른 곳에서 시험). 같은 반을 자습과 제외에 동시에 켤 수 없으며, 나중에 누른 쪽이 남습니다.</td></tr>
+        <tr><td>요약 줄</td><td>칸 오른쪽 아래에 "교실 7 · 복도 2"처럼 그 칸에서 생기는 감독 자리 수가 바로 표시됩니다.</td></tr>
+      </table>
+      <div class="note">학년 전체가 자습인 교시(<code>자습</code>이라고 적거나 모든 반의 자습 번호를 켠 경우)는 1단계의 "전체 자습 교시에도 교실 감독" 옵션에 따라 교실 감독을 넣거나 복도 감독만 둡니다.</div>
+      <h3 id="s2-paste">엑셀에서 붙여넣기</h3>
+      <ul>
+        <li>엑셀에서 과목 표를 드래그해 복사(<kbd>Ctrl</kbd>+<kbd>C</kbd>)한 뒤, 시작할 과목 칸을 클릭하고 붙여넣기(<kbd>Ctrl</kbd>+<kbd>V</kbd>)하면 그 칸부터 아래·오른쪽으로 채워집니다. 1교시 1학년 칸에 붙여넣으면 가장 편합니다.</li>
+        <li>오른쪽 위 <b>엑셀에서 붙여넣기</b> 버튼은 큰 입력창을 엽니다. 1·2·3학년 세 열(또는 일차·시험일·교시가 포함된 여섯 열)을 붙여넣으면 1일차 1교시부터 차례로 채웁니다.</li>
+        <li>붙여넣기는 과목명만 바꾸고, 이미 눌러 둔 자습·제외·추가반은 그대로 둡니다. 과목명에 <code>*(장소)</code>가 들어 있으면 추가반으로 자동 변환됩니다.</li>
+      </ul>
+
+      <h2 id="s3">3. 교사 명단</h2>
+      <table>
+        <tr><th>열</th><th>설명</th></tr>
+        <tr><td>이름</td><td>교사 이름. 같은 이름이 둘이면 빨갛게 표시됩니다. 동명이인은 <code>홍길동A</code>처럼 구분해 주세요.</td></tr>
+        <tr><td>과목</td><td>담당 과목. 여러 과목은 <code>/</code>로 구분합니다(예: <code>화학/윤리</code>). <b>본인 과목 시험 시간에는 감독에서 빠집니다.</b> <code>수학</code> 교사는 <code>수학Ⅰ</code>·<code>수학Ⅱ</code>·<code>수학(미적)</code> 시험과 같은 과목으로 봅니다. 시험 과목명과 표기가 달라 짝을 찾지 못하면 5단계 점검 목록에 표시됩니다.</td></tr>
+        <tr><td>담임</td><td><code>2-5</code>처럼 학년-반. 부장은 <code>3-부장</code>. 담임은 본인 반 교실에 들어가지 않습니다. 담임이 아니면 비웁니다.</td></tr>
+        <tr><td>구분</td><td>아래 표 참고.</td></tr>
+        <tr><td>목표시수</td><td>원로: 이번 시험에서 채울 시수(필수). 그 밖의 구분: 적어 두면 이 시수를 넘기지 않도록 합니다(비우면 제한 없음).</td></tr>
+        <tr><td>이전 누적</td><td>지난 회차까지의 전체 시수. 2차부터 쓰며, 누적이 적은 선생님께 더 배정합니다. <b>이전 회차 결과 엑셀에서 누적 불러오기</b>로 한 번에 채울 수 있고, 이때 각 선생님이 들어갔던 교실 이력도 함께 보관됩니다.</td></tr>
+      </table>
+      <h3 id="s3-type">구분과 목표시수</h3>
+      <table>
+        <tr><th>구분</th><th>배정 방식</th></tr>
+        <tr><td>일반</td><td>모든 자리에 들어갈 수 있고, 누적 시수가 고르게 되도록 배정합니다.</td></tr>
+        <tr><td>고사담당</td><td>시험 운영 담당. <b>1교시에만</b> 배정하고 2교시부터는 빠집니다. 예비 명단에도 넣지 않습니다.</td></tr>
+        <tr><td>원로</td><td>교실 감독만 하고 복도·자습 감독은 하지 않습니다. 목표시수만큼 채우며, 하루 상한은 목표시수÷시험일수(올림)입니다.</td></tr>
+        <tr><td>순회</td><td>복도 감독과 자습 교실만 맡고, 시험 치르는 교실에는 들어가지 않습니다.</td></tr>
+        <tr><td>제외</td><td>출산·연수 등으로 이번 시험 감독에서 완전히 뺍니다. 명단에는 남아 시수표에 표시됩니다.</td></tr>
+      </table>
+      <h3 id="s3-excel">엑셀 양식과 불러오기</h3>
+      <ul>
+        <li><b>엑셀 파일 불러오기</b>는 첫 번째 시트를 읽습니다. 첫 줄에 머리글(이름, 과목, 담임, 교사구분(또는 구분), 목표시수, 누적)이 있으면 열 순서는 상관없습니다. 머리글이 없으면 <code>[연번,] 이름, 과목, 담임, 구분, 목표시수, 이전누적</code> 순서로 읽습니다.</li>
+        <li><b>붙여넣기</b>는 엑셀 표를 복사해 넣는 방식으로, 파일 형식과 상관없이 쓸 수 있습니다. 예전 형식(.xls) 파일은 이 방법을 쓰거나 .xlsx로 저장한 뒤 불러오세요.</li>
+        <li>명단 표 안에서도 엑셀처럼 여러 칸을 한 번에 붙여넣을 수 있습니다. 시작 칸을 클릭하고 <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
+        <li>이미 명단이 있을 때 불러오면 <b>뒤에 추가</b>할지 <b>새 명단으로 바꿀지</b> 묻습니다.</li>
+      </ul>
+
+      <h2 id="s4">4. 특수실 · 예외</h2>
+      <h3 id="s4-special">특수실</h3>
+      <p>특수학급처럼 시험 기간 내내 한 선생님이 따로 자리를 지키는 곳입니다. 지정자는 일반 감독에서 빠지고 결과에 "특수(명칭)"으로 표시되며, 적어 둔 시수가 그 선생님의 이번 회차 시수에 더해져 시수표와 누적에 반영됩니다.</p>
+      <h3 id="s4-exceptions">일차·교시별 예외 감독자</h3>
+      <ul>
+        <li>출장·연가·수업 등으로 특정 교시에 감독할 수 없는 선생님을 일차별로 적습니다. 교시를 고르고 이름을 명단에서 선택합니다. 종일 자리를 비우면 교시를 <b>종일</b>로 고릅니다.</li>
+        <li>명단에 없는 이름은 빨갛게 표시되고 적용되지 않습니다. 이름 뒤 공백이나 오타가 흔한 원인입니다.</li>
+        <li>예외로 적힌 교시에는 감독뿐 아니라 예비 명단에서도 빠집니다. 사유는 결과_감독표의 비고 칸에 함께 적힙니다.</li>
+      </ul>
+
+      <h2 id="s5">5. 배정 결과</h2>
+      <ol>
+        <li><b>배정 전 점검</b>을 봅니다. 빨간 항목(명단 없음, 이름 중복 등)은 해결해야 배정할 수 있습니다. 노란 항목은 배정은 되지만 결과에 영향을 줄 수 있는 것(과목명 불일치, 교사 부족 가능성 등)이고, 참고 항목은 비어 있는 과목 칸 같은 안내입니다.</li>
+        <li><b>배정 시작</b>을 누르면 1~3초 뒤 결과가 나옵니다. 위쪽 요약에서 <b>감독 부족 자리</b>와 <b>규칙 위반 칸</b>이 0인지 먼저 확인하세요.</li>
+        <li><b>감독표 / 개인별 시간표 / 시수표</b>를 번갈아 보며 검토합니다. 시수표의 <b>가능 교시</b>는 그 선생님이 이번 시험에서 들어갈 수 있는 교시 수로, 본인 과목 시험이 많거나 고사담당이면 적습니다. 이런 분이 적게 배정되는 것은 규칙 때문이지 오류가 아닙니다.</li>
+        <li>마음에 들지 않으면 <b>처음부터 새로 배정</b>(새 조합) 또는 칸을 직접 고칩니다.</li>
+        <li><b>엑셀로 저장</b>한 뒤, 다음 회차를 준비할 때 <b>누적 반영 → 다음 회차</b>를 누릅니다.</li>
+      </ol>
+      <h3 id="s5-edit">결과 직접 수정</h3>
+      <ul>
+        <li>감독표나 개인별 시간표의 칸을 누르면 <b>바로 넣을 수 있는 선생님</b>(누적 적은 순), <b>같은 교시 다른 자리와 맞바꾸기</b>, <b>규칙상 어려운 선생님</b>(이유 표시, 확인 후 넣을 수 있음) 목록이 나옵니다. 이름으로 검색할 수 있습니다.</li>
+        <li>개인별 시간표에서 비어 있는 칸을 누르면 그 선생님을 그 교시의 어느 자리에 넣을지 고를 수 있습니다.</li>
+        <li>직접 고친 칸은 📌로 고정됩니다. <b>다시 돌리기 (📌 유지)</b>는 고정한 칸은 그대로 두고 나머지만 다시 고르게 맞춥니다. <b>고정 모두 풀기</b>로 해제할 수 있습니다.</li>
+        <li>규칙에 어긋나게 고치면 그 칸에 ⚠가 표시되고 마우스를 올리면 이유가 보입니다. 저장은 막지 않습니다.</li>
+        <li>배정 후 입력(과목·교사·예외)을 바꾸면 결과 위에 "입력이 바뀜" 안내가 뜹니다. 바뀐 입력으로 결과를 다시 검사해 보여 주며, 다시 돌리기로 반영합니다.</li>
+      </ul>
+      <h3 id="s5-excel">엑셀 파일 구성</h3>
+      <table>
+        <tr><th>시트</th><th>내용</th></tr>
+        <tr><td>결과_감독표</td><td>일차·교시·학년별로 1반~N반, 추가반, 복도 감독 이름. 자습 칸은 노란색, 비고에 특수실과 예외 사유. 게시용입니다.</td></tr>
+        <tr><td>결과_시수표</td><td>교사별 교실·복도·자습·특수실 시수, 이번 합계, 이전 누적, 전체 누적. <b>다음 회차에서 누적을 불러올 때 이 시트를 읽습니다.</b></td></tr>
+        <tr><td>결과_개인별시간표</td><td>교사별 교시 배정(예: 2-3, 1-복도1, 3-음악실, (자습) 표시), 본인 시험 교시는 파란색, 아래에 교시별 예비 명단(분홍). 통계 열은 엑셀 수식이라 손으로 고쳐도 다시 계산됩니다. 다음 회차의 교실 이력은 이 시트에서 읽습니다.</td></tr>
+      </table>
+
+      <h2 id="rules">배정 규칙과 원리</h2>
+      <p><b>반드시 지키는 규칙</b>: 같은 교시에 한 자리 · 본인 과목 시험 시간 제외 · 담임은 본인 반 교실 제외 · 예외 감독자 제외 · 특수실 지정자 제외 · 하루 3교시 연속 금지 · 고사담당은 1교시만 · 순회는 시험 교실 제외 · 원로는 복도·자습 제외, 목표시수와 하루 상한 준수 · 제외 교사와 (4차) 3학년 담임·부장 제외 · (옵션) 같은 교실 두 번 금지.</p>
+      <p><b>고르게 맞추는 순서</b>: 감독 부족 없음 → 목표시수 초과 없음 → 원로 목표 채우기 → 일반 교사 전체 누적 시수 차이 최소 → 복도·자습 / 교실 시수 차이 → 하루에 몰리지 않게 → 연속 교시 줄이기 → 같은 교실 반복 줄이기.</p>
+      <p>초안을 만든 뒤 수십만 번 감독을 바꾸거나 맞바꿔 보며 점수가 좋아지는 쪽으로 다듬습니다(담금질 기법). 가상 학교 자료로 검증했을 때 결과는 이론상 가장 고른 분배와 같거나 1시간 차이였으며, 남는 차이는 규칙(본인 시험이 많은 과목, 고사담당 1교시 제한 등) 때문입니다.</p>
+
+      <h2 id="faq">자주 묻는 질문</h2>
+      <p><b>부족 자리가 생깁니다.</b> 그 교시에 들어갈 수 있는 교사가 자리보다 적은 것입니다. 점검 목록에 "필요한 감독 N명 > 가능한 교사 M명"으로 미리 표시됩니다. 복도 감독 수를 줄이거나, 전체 자습 교시의 교실 감독을 끄거나, 그 교시의 예외를 줄이거나, 고사담당·순회 구분을 조정해 보세요.</p>
+      <p><b>어떤 선생님만 시수가 적습니다.</b> 시수표의 "가능 교시"를 보세요. 본인 과목 시험이 여러 교시에 있거나(국·영·수), 고사담당이거나, 예외가 많으면 들어갈 수 있는 교시 자체가 적습니다. 과목명이 시험 과목과 다르게 적혀 있어도(예: 교사 "물리" ↔ 시험 "물리학Ⅰ") 점검 목록에 표시됩니다.</p>
+      <p><b>4차 고사에서 3학년 담임은 어떻게 되나요?</b> "3학년 담임·부장 제외"가 켜져 있으면 배정에서 빠집니다. 이분들의 시수는 3차까지의 누적을 기준으로 보며, 연말 합계로 비교하지 않습니다. 4차에도 1·2학년 감독을 맡기려면 옵션을 끄세요.</p>
+      <p><b>"같은 교실 두 번 금지"를 켜면 자리가 모자라지 않나요?</b> 아닙니다. 한 선생님이 한 시험에 교실 3~4번 들어가고 교실은 20개가 넘어 여유가 큽니다. 1년 내내 금지해도 부족 자리가 생기지 않는 것을 확인했습니다.</p>
+      <p><b>예전 프로그램의 백업 파일을 그대로 쓸 수 있나요?</b> 네. 백업 불러오기로 열면 반 수·일차·과목(자습·제외 버튼 포함)·교사·특수실·예외가 변환됩니다. 과목명 뒤의 <code>*(장소)</code>는 추가반 버튼으로 바뀝니다.</p>
+      <p><b>엑셀 저장이 되지 않습니다.</b> 브라우저가 다운로드를 막았는지 주소창 오른쪽의 아이콘을 확인하세요. 파일 이름에 한글이 깨지면 브라우저 설정의 언어가 한국어인지 확인합니다.</p>
+      <p><b>두 사람이 같은 컴퓨터를 쓰면?</b> 브라우저 사용자(프로필)가 다르면 자료가 따로 저장됩니다. 같은 프로필이면 하나의 자료를 공유하니 백업 파일로 각자 보관하세요.</p>
+    </div></div>`;
+  }
+
+  function showHelp(topic) {
     dialog({
-      title: '📖 사용 설명서', wide: true,
-      html: `<div class="help">
-      <h2>0. 자료 보관</h2>
-      <ul>
-        <li>입력한 내용은 <b>이 브라우저에 자동 저장</b>됩니다. 같은 컴퓨터·같은 브라우저로 다시 열면 그대로 있습니다.</li>
-        <li>다른 컴퓨터로 옮기거나 안전하게 보관하려면 <b>💾 백업 파일 저장</b>으로 파일(.json) 하나를 받아 두세요. <b>📂 백업 불러오기</b>로 그대로 복원됩니다. 예전 파이썬 프로그램의 DATA SAVE 파일도 불러올 수 있습니다.</li>
-        <li>백업 버튼 옆 노란 점(●)은 마지막 백업 이후 바뀐 내용이 있다는 뜻입니다.</li>
-      </ul>
-      <h2>1. 기본 설정</h2>
-      <ul>
-        <li><b>배정 회차</b>: 2~4차는 교사 명단의 "이전 누적" 시수를 더해서 누적이 적은 선생님께 더 배정합니다.</li>
-        <li><b>3학년 담임/부장 제외</b>: 4차 고사에서만 보입니다. 담임 칸이 <code>3-</code>로 시작하면 배정에서 뺍니다.</li>
-        <li><b>전체 자습 시 교실 감독</b>: 끄면 학년 전체가 자습인 교시는 복도 감독만 둡니다.</li>
-        <li><b>한 번 들어간 교실에는 다시 넣지 않음</b>: 같은 선생님을 같은 교실(학년-반)에 두 번 넣지 않습니다. "올해 이전 회차 교실까지"를 고르면 이전 결과 엑셀에서 불러온 교실 이력도 피합니다. 교사 1명이 한 시험에 교실 3~4번, 교실은 20개가 넘어 켜도 부족 자리가 생기지 않습니다.</li>
-        <li><b>3학년 담임 연간 보정</b>: 4차 고사에서 3학년 담임/부장을 빼면 그분들은 연말에 3시간쯤 적게 끝납니다. 1~3차에서 회차당 1시간씩 더 배정하면 연말 차이가 1시간 안쪽으로 줄어듭니다. 4차에도 3학년 담임이 감독한다면 0으로 두세요.</li>
-        <li>반 수·일차·교시를 바꾸면 과목·예외 입력칸이 자동으로 맞춰집니다.</li>
-      </ul>
-      <h2>2. 시험 과목</h2>
-      <ul>
-        <li>🟡 <b>자습</b> 버튼: 그 반은 자습 감독(자습 시수)으로 셉니다. 🔴 <b>제외</b> 버튼: 그 반에는 감독을 넣지 않습니다.</li>
-        <li><code>수학*</code> → 추가반(특별실) 개설, <code>수학*(음악실)</code> → 장소 이름 지정.</li>
-        <li><code>자습</code> → 학년 전체 자습. 빈칸 → 그 학년은 시험 없음(감독 없음).</li>
-        <li>엑셀에서 과목 표를 복사해 과목 칸에 붙여넣거나, [엑셀에서 붙여넣기]를 이용하세요.</li>
-      </ul>
-      <h2>3. 교사 명단</h2>
-      <ul>
-        <li>엑셀 파일 불러오기는 첫 줄 머리글(이름, 과목, 담임, 교사구분, 목표시수)을 읽어 열 순서와 상관없이 가져옵니다. 머리글이 없으면 <code>연번, 이름, 과목, 담임, 교사구분, 목표시수</code> 순서로 읽습니다.</li>
-        <li>교사의 과목이 시험 과목과 같으면 그 시간에는 감독하지 않습니다. 과목명이 다르게 적혀 있으면 [5. 배정 결과]의 점검 목록에 표시됩니다.</li>
-        <li><b>고사담당</b>: 1교시에만 / <b>원로</b>: 교실 감독만, 목표시수까지, 하루 상한 = 목표시수÷일수 / <b>순회</b>: 복도·자습만 / <b>제외</b>: 배정 안 함.</li>
-      </ul>
-      <h2>4. 특수실·예외</h2>
-      <ul>
-        <li>특수실 지정자는 일반 감독에서 빠지고 적은 시수가 그 선생님 시수에 더해집니다.</li>
-        <li>예외 감독자는 명단에서 이름을 고르고 교시(또는 전체)를 정합니다.</li>
-      </ul>
-      <h2>5. 배정 결과</h2>
-      <ul>
-        <li><b>🚀 배정 시작</b>: 지켜야 하는 규칙(본인 시험, 담임반, 예외, 3교시 연속 금지 등)은 반드시 지키면서, 수십만 가지 바꿔 보기로 <b>시수 차이가 가장 작은</b> 배정을 찾습니다.</li>
-        <li>칸을 누르면 <b>바로 넣을 수 있는 선생님</b>(누적 적은 순), <b>같은 교시 맞바꾸기</b>, 규칙상 어려운 선생님이 나옵니다. 고친 칸은 📌로 고정됩니다.</li>
-        <li><b>🔄 다시 돌리기 (📌 유지)</b>: 직접 고친 칸은 그대로 두고 나머지만 다시 고르게 맞춥니다.</li>
-        <li><b>💾 엑셀로 저장</b>: 결과_감독표 / 결과_시수표 / 결과_개인별시간표 세 시트로 저장합니다. 다음 회차에서 이 파일로 누적을 불러올 수 있습니다.</li>
-        <li><b>➡ 누적 반영</b>: 엑셀을 거치지 않고, 이번 시수를 바로 이전 누적에 더하고 다음 회차로 넘어갑니다.</li>
-      </ul>
-      </div>`,
+      title: '사용 설명서', xwide: true, html: helpHTML(),
+      onOpen(back) {
+        const body = $('.modal-body', back);
+        const go = (id) => { const el = $('#' + id, back); if (el) body.scrollTop = el.offsetTop - body.offsetTop - 6; };
+        back.addEventListener('click', (e) => { const a = e.target.closest('.help-toc a'); if (a) { e.preventDefault(); go(a.getAttribute('href').slice(1)); } });
+        if (topic) setTimeout(() => go(topic), 0);
+      },
     });
   }
 
@@ -948,6 +1205,12 @@
   let rerenderTimer = null;
   function deferRender(fn, ms) { clearTimeout(rerenderTimer); rerenderTimer = setTimeout(fn, ms || 300); }
 
+  function refreshCellSummary(d, p, g) {
+    const sum = cellSummary(d, p, g);
+    const box = $(`[data-sum="${d},${p},${g}"]`);
+    if (box) { box.className = 'sc-sum ' + sum.cls; box.textContent = sum.text; }
+  }
+
   document.addEventListener('input', (e) => {
     const el = e.target;
     const bind = el.dataset && el.dataset.bind;
@@ -955,7 +1218,7 @@
     let val = el.type === 'checkbox' ? el.checked : el.value;
     if (el.hasAttribute('data-num')) {
       const n = parseInt(val, 10);
-      if (!Number.isFinite(n)) return; // 입력 중 빈칸은 무시
+      if (!Number.isFinite(n)) return;
       val = n;
     }
     setPath(state, bind, val);
@@ -967,30 +1230,20 @@
     if (bind.startsWith('classes.')) state.classes = state.classes.map((n) => Math.max(1, Math.min(30, n)));
     save();
 
-    // 화면 일부만 갱신 (입력 중인 칸은 다시 그리지 않음 → 깜빡임/한글 입력 끊김 방지)
-    if (el.dataset.subj) {
-      const [d, p, g] = el.dataset.subj.split(',').map(Number);
-      const sum = cellSummary(d, p, g);
-      const box = $(`[data-sum="${d},${p},${g}"]`);
-      if (box) { box.className = 'cell-sum ' + sum.cls; box.textContent = sum.text; }
-    }
+    if (el.dataset.subj) { const [d, p, g] = el.dataset.subj.split(',').map(Number); refreshCellSummary(d, p, g); }
     if (bind.startsWith('teachers.')) deferRender(() => { updateTeacherDatalist(); updateBadges(); refreshTeacherDup(); }, 400);
     if (el.hasAttribute('data-namecheck')) {
       const names = new Set(state.teachers.map((t) => t.name.trim()));
       el.classList.toggle('bad', !!el.value.trim() && !names.has(el.value.trim()));
     }
     if (el.dataset.rerender) renderers[el.dataset.rerender]();
-    if (el.tagName === 'SELECT' || el.type === 'checkbox') updateBadges();
+    if (el.tagName === 'SELECT' || el.type === 'checkbox' || bind.startsWith('days.') || bind.startsWith('specials.')) deferRender(updateBadges, 300);
   });
 
-  // 숫자칸에서 포커스가 빠지면 허용 범위로 고친 값을 다시 보여줌 (표를 다시 그리지 않아 커서가 튀지 않음)
   document.addEventListener('change', (e) => {
     const el = e.target;
     if (!el.hasAttribute || !el.hasAttribute('data-num')) return;
-    const ks = el.dataset.bind.split('.');
-    let v = state;
-    ks.forEach((k) => { v = v[k]; });
-    el.value = v;
+    el.value = getPath(state, el.dataset.bind);
     updateBadges();
   });
 
@@ -1004,16 +1257,15 @@
     });
   }
 
-  // 엑셀에서 복사한 여러 칸 붙여넣기
   document.addEventListener('paste', (e) => {
     const el = e.target;
     const text = (e.clipboardData || window.clipboardData).getData('text');
     if (!text || !/[\t\n]/.test(text.replace(/\n$/, ''))) return;
-    if (el.dataset && el.dataset.subj) {
+    if (el.dataset && el.dataset.subj && el.classList.contains('sc-name')) {
       e.preventDefault();
       const [d, p, g] = el.dataset.subj.split(',').map(Number);
       const n = applySubjectGrid(parseClipboardGrid(text), d, p, g);
-      save(); renderers.subjects(); toast(`${n}칸을 붙여넣었습니다.`);
+      save(); renderers.subjects(); updateBadges(); toast(`${n}칸을 붙여넣었습니다.`);
     } else if (el.dataset && el.dataset.tcell) {
       e.preventDefault();
       const [r, c] = el.dataset.tcell.split(',').map(Number);
@@ -1031,20 +1283,20 @@
     const act = el.dataset.act;
     const i = el.dataset.i != null ? +el.dataset.i : null;
     switch (act) {
-      case 'help': return showHelp();
+      case 'help': return showHelp(el.dataset.topic || '');
+      case 'goto': return showTab(el.dataset.tab);
       case 'backup-save': return backupSave();
       case 'backup-load': return backupLoad();
-      case 'goto-run': return showTab('result');
       case 'reset-all': {
         if (!(await confirmBox('전체 초기화', '입력한 모든 자료와 배정 결과를 지웁니다. 먼저 백업 파일을 저장해 두는 것을 권합니다. 계속할까요?', '모두 지우기', 'orange'))) return;
         state = defaultState(); save(false); renderAll(); return;
       }
-      case 'day-add': state.days.push(newDay(state.days.length ? state.days[state.days.length - 1].periods : 3)); save(); return renderers.setup();
+      case 'day-add': state.days.push(newDay(state.days.length ? state.days[state.days.length - 1].periods : 3)); save(); renderers.setup(); updateBadges(); return;
       case 'day-del': {
         const day = state.days[i];
-        const filled = day.subjects.some((r) => r.some((c) => c.name || c.study.length || c.exclude.length)) || day.exceptions.length;
+        const filled = day.subjects.some((r) => r.some((c) => c.name || c.study.length || c.exclude.length || c.special)) || day.exceptions.length;
         if (filled && !(await confirmBox('일차 삭제', `${i + 1}일차의 과목·예외 입력도 함께 지워집니다. 삭제할까요?`, '삭제', 'orange'))) return;
-        state.days.splice(i, 1); if (!state.days.length) state.days.push(newDay(3)); save(); return renderers.setup();
+        state.days.splice(i, 1); if (!state.days.length) state.days.push(newDay(3)); save(); renderers.setup(); updateBadges(); return;
       }
       case 'chip': {
         const d = +el.dataset.d, p = +el.dataset.p, g = +el.dataset.g, c = +el.dataset.c, kind = el.dataset.kind;
@@ -1056,12 +1308,40 @@
         save();
         const td = $(`#sc-${d}-${p}-${g}`);
         if (td) td.innerHTML = subjectCellHTML(d, p, g);
+        deferRender(updateBadges, 300);
         return;
+      }
+      case 'chip-all': {
+        const d = +el.dataset.d, p = +el.dataset.p, g = +el.dataset.g;
+        const cell = state.days[d].subjects[p - 1][g - 1];
+        const cc = state.classes[g - 1];
+        if (cell.study.length >= cc) cell.study = [];
+        else { cell.study = range(1, cc); cell.exclude = []; }
+        save();
+        const td = $(`#sc-${d}-${p}-${g}`);
+        if (td) td.innerHTML = subjectCellHTML(d, p, g);
+        deferRender(updateBadges, 300);
+        return;
+      }
+      case 'sp-toggle': {
+        const d = +el.dataset.d, p = +el.dataset.p, g = +el.dataset.g;
+        const cell = state.days[d].subjects[p - 1][g - 1];
+        cell.special = !cell.special;
+        save();
+        const td = $(`#sc-${d}-${p}-${g}`);
+        if (td) { td.innerHTML = subjectCellHTML(d, p, g); const inp = $('.sc-room', td); if (inp) inp.focus(); }
+        deferRender(updateBadges, 300);
+        return;
+      }
+      case 'subj-clear': {
+        if (!(await confirmBox('과목 모두 지우기', '모든 일차의 과목명·자습·제외·추가반 입력을 지울까요? (일차와 교시 수는 남습니다)', '모두 지우기', 'orange'))) return;
+        state.days.forEach((day) => day.subjects.forEach((row) => row.forEach((c, g) => { row[g] = emptyCell(); })));
+        save(); renderers.subjects(); updateBadges(); return;
       }
       case 'subj-paste': {
         const txt = await dialog({
-          title: '📋 과목 붙여넣기', wide: true,
-          html: `<p class="hint" style="margin-top:0">엑셀에서 <b>1학년·2학년·3학년</b> 세 열(또는 일차·시험일·교시를 포함한 여섯 열)을 복사해서 아래에 붙여넣으세요. 1일차 1교시부터 차례로 채웁니다. 지금 들어 있는 과목명은 덮어쓰고, 자습/제외 버튼은 그대로 둡니다.</p><textarea id="pasteBox" placeholder="국어	통합과학	한국사&#10;수학	화학	지구과학"></textarea>`,
+          title: '과목 붙여넣기', wide: true,
+          html: `<p class="small">엑셀에서 <b>1학년·2학년·3학년</b> 세 열(또는 일차·시험일·교시를 포함한 여섯 열)을 복사해서 아래에 붙여넣으세요. 1일차 1교시부터 차례로 채웁니다. 지금 들어 있는 과목명은 덮어쓰고, 자습·제외·추가반 설정은 그대로 둡니다.</p><textarea id="pasteBox" placeholder="국어	통합과학	한국사&#10;수학	화학	지구과학"></textarea>`,
           buttons: [{ label: '취소', value: null }, { label: '채우기', value: (b) => $('#pasteBox', b).value, cls: 'primary' }],
           onOpen: (b) => $('#pasteBox', b).focus(),
         });
@@ -1069,10 +1349,10 @@
         let rows = parseClipboardGrid(txt);
         rows = rows.map((r) => (r.length >= 6 ? r.slice(3, 6) : r));
         const n = applySubjectGrid(rows, 0, 1, 1);
-        save(); renderers.subjects(); toast(`${n}칸을 채웠습니다.`);
+        save(); renderers.subjects(); updateBadges(); toast(`${n}칸을 채웠습니다.`);
         return;
       }
-      case 't-add': state.teachers.push(newTeacher()); save(); renderers.teachers(); { const inp = $$('[data-tcell$=",0"]').pop(); if (inp) inp.focus(); } return;
+      case 't-add': state.teachers.push(newTeacher()); save(); renderers.teachers(); { const inp = $$('[data-tcell$=",0"]').pop(); if (inp) { inp.focus(); inp.scrollIntoView({ block: 'nearest' }); } } return;
       case 't-del': state.teachers.splice(i, 1); save(); renderers.teachers(); updateTeacherDatalist(); updateBadges(); return;
       case 't-clear':
         if (!(await confirmBox('명단 전체 삭제', '교사 명단을 모두 지울까요?', '모두 지우기', 'orange'))) return;
@@ -1087,8 +1367,8 @@
           catch (err) { await dialog({ title: '엑셀 읽기 실패', html: `<p>${esc(err.message)}</p>` }); return; }
         } else {
           const txt = await dialog({
-            title: '📋 교사 명단 붙여넣기', wide: true,
-            html: `<p class="hint" style="margin-top:0">엑셀 표를 머리글(이름, 과목, 담임, 교사구분, 목표시수)째로 복사해 붙여넣으면 열 순서와 상관없이 읽습니다. 머리글 없이 붙여넣으면 <code>[연번,] 이름, 과목, 담임, 교사구분, 목표시수, 이전누적</code> 순서로 읽습니다.</p><textarea id="pasteBox"></textarea>`,
+            title: '교사 명단 붙여넣기', wide: true,
+            html: `<p class="small">엑셀 표를 머리글(이름, 과목, 담임, 교사구분, 목표시수)째로 복사해 붙여넣으면 열 순서와 상관없이 읽습니다. 머리글 없이 붙여넣으면 <code>[연번,] 이름, 과목, 담임, 교사구분, 목표시수, 이전누적</code> 순서로 읽습니다.</p><textarea id="pasteBox" placeholder="이름	과목	담임	교사구분	목표시수&#10;홍길동	수학	2-5	일반	"></textarea>`,
             buttons: [{ label: '취소', value: null }, { label: '읽기', value: (b) => $('#pasteBox', b).value, cls: 'primary' }],
             onOpen: (b) => $('#pasteBox', b).focus(),
           });
@@ -1117,18 +1397,18 @@
           state.teachers.forEach((t) => { const n = t.name.trim(); if (!n) return; if (n in cum) { t.prev = String(cum[n]); hit++; } else miss.push(n); });
           Object.keys(rooms).forEach((n) => { const set = new Set((state.roomHistory[n] || []).concat(rooms[n])); state.roomHistory[n] = Array.from(set); roomN += rooms[n].length; });
           if (state.term === TERMS[0]) state.term = TERMS[1];
-          save(); renderers.teachers(); updateBadges();
-          await dialog({ title: '누적 시수 불러오기', html: `<p>${hit}명의 누적 시수를 넣었습니다.${miss.length ? `<br>파일에 없는 선생님 ${miss.length}명(0으로 시작): ${esc(miss.join(', '))}` : ''}</p>${roomN ? `<p>교실 이력 ${roomN}건을 보관했습니다. (1. 기본 설정에서 "올해 이전 회차 교실까지"를 고르면 이 교실들을 피합니다)</p>` : ''}<p class="muted">배정 회차: ${esc(state.term)}</p>` });
+          save(); renderers.teachers(); updateBadges(); renderSaveState();
+          await dialog({ title: '누적 시수 불러오기', html: `<p>${hit}명의 누적 시수를 넣었습니다.${miss.length ? `<br>파일에 없는 선생님 ${miss.length}명(0으로 시작): ${esc(miss.join(', '))}` : ''}</p>${roomN ? `<p>교실 이력 ${roomN}건을 보관했습니다. (1단계에서 "올해 이전 회차까지"를 고르면 이 교실들을 피합니다)</p>` : ''}<p class="muted">배정 회차: ${esc(state.term)}</p>` });
         } catch (err) { await dialog({ title: '불러오기 실패', html: `<p>${esc(err.message)}</p>` }); }
         return;
       }
       case 't-prev-clear':
         if (!(await confirmBox('누적 비우기', '모든 선생님의 이전 누적 시수와 보관 중인 교실 이력을 지울까요?', '지우기', 'orange'))) return;
         state.teachers.forEach((t) => { t.prev = ''; }); state.roomHistory = {}; save(); renderers.teachers(); return;
-      case 'sp-add': state.specials.push({ room: '', teacher: '', hours: '' }); save(); return renderers.extras();
-      case 'sp-del': state.specials.splice(i, 1); save(); return renderers.extras();
-      case 'ex-add': { const d = +el.dataset.d; state.days[d].exceptions.push({ period: '', name: '', reason: '' }); save(); renderers.extras(); const rows = $$(`[data-bind^="days.${d}.exceptions."][data-bind$=".name"]`); if (rows.length) rows[rows.length - 1].focus(); return; }
-      case 'ex-del': state.days[+el.dataset.d].exceptions.splice(i, 1); save(); return renderers.extras();
+      case 'sp-add': state.specials.push({ room: '', teacher: '', hours: '' }); save(); renderers.extras(); { const inp = $$('[data-bind^="specials."][data-bind$=".room"]').pop(); if (inp) inp.focus(); } return;
+      case 'sp-del': state.specials.splice(i, 1); save(); renderers.extras(); updateBadges(); return;
+      case 'ex-add': { const d = +el.dataset.d; state.days[d].exceptions.push({ period: '', name: '', reason: '' }); save(); renderers.extras(); const rows = $$(`[data-bind^="days.${d}.exceptions."][data-bind$=".period"]`); if (rows.length) rows[rows.length - 1].focus(); return; }
+      case 'ex-del': state.days[+el.dataset.d].exceptions.splice(i, 1); save(); renderers.extras(); updateBadges(); return;
       case 'run': return runAssign(false);
       case 'rerun': return runAssign(true);
       case 'export': return exportExcel();
@@ -1138,7 +1418,7 @@
       case 'unpin-all': state.result.pinned = {}; save(); return renderers.result();
       case 'clear-result':
         if (!(await confirmBox('결과 지우기', '배정 결과와 직접 고친 내용을 지울까요?', '지우기', 'orange'))) return;
-        state.result = null; save(); return renderers.result();
+        state.result = null; save(); renderers.result(); updateBadges(); return;
       case 'apply-cum': return applyCumulative();
       default:
     }
@@ -1149,8 +1429,10 @@
   });
 
   // 시작
-  if (!['setup', 'subjects', 'teachers', 'extras', 'result'].includes(ui.tab)) ui.tab = 'setup';
+  renderStepper();
+  if (!STEPS.some((s) => s.key === ui.tab)) ui.tab = 'setup';
   renderAll();
   showTab(ui.tab);
-  window.__app = { get state() { return state; } };
+  if (!ui.seenIntro) showIntro();
+  window.__app = { get state() { return state; }, showHelp };
 })();
