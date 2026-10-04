@@ -4,27 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>스마트 시험 감독 배정</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+  <meta name="description" content="시험 감독 배정 프로그램 — 규칙을 지키며 시수를 고르게 배정하고 엑셀로 내보냅니다.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%233b4fd8'/><path d='M8 10h16M8 16h16M8 22h10' stroke='white' stroke-width='3' stroke-linecap='round'/></svg>">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <header class="topbar">
-    <h1>📊 스마트 시험 감독 배정 <small>by 이용휘</small></h1>
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div class="brand-text"><b>스마트 시험 감독 배정</b><small id="brandSub">by 이용휘</small></div>
+    </div>
     <span class="save-state" id="saveState"></span>
     <span class="spacer"></span>
-    <button class="btn" data-act="help">❓ 설명서</button>
-    <button class="btn" data-act="backup-save" title="입력한 자료 전체를 파일 하나로 내 컴퓨터에 저장">💾 백업 파일 저장<span id="backupDot"></span></button>
-    <button class="btn" data-act="backup-load" title="백업 파일(.json)을 불러와 그대로 복원">📂 백업 불러오기</button>
-    <button class="btn primary" data-act="goto-run">🚀 배정하러 가기</button>
+    <button class="btn ghost" data-act="help" title="자세한 사용 설명서">설명서</button>
+    <button class="btn ghost" data-act="backup-load" title="백업 파일(.json)을 불러와 그대로 복원">백업 불러오기</button>
+    <button class="btn" data-act="backup-save" title="입력한 자료 전체를 파일 하나로 내 컴퓨터에 저장">백업 저장<span id="backupDot"></span></button>
   </header>
 
-  <nav class="steps" id="steps">
-    <button class="step" data-tab="setup">1. 기본 설정</button>
-    <button class="step" data-tab="subjects">2. 시험 과목</button>
-    <button class="step" data-tab="teachers">3. 교사 명단</button>
-    <button class="step" data-tab="extras">4. 특수실·예외</button>
-    <button class="step" data-tab="result">5. 배정 결과</button>
-  </nav>
+  <nav class="stepper" id="steps" aria-label="진행 단계"></nav>
 
   <main>
     <section class="tab" id="tab-setup"></section>
