@@ -592,6 +592,21 @@
     return h;
   }
 
+  // 결과 요약(부족·위반·시수 범위 등)을 머리줄에 들어가는 작은 칩으로
+  function kpiHTML(model, ev, pinCount) {
+    if (!ev) return '';
+    const s = ev.summary;
+    const chip = (cls, label, val, title) => `<span class="kpi ${cls}" title="${title}"><small>${label}</small><b>${val}</b></span>`;
+    return `<span class="kpis">
+      ${chip(s.shortage ? 'bad' : 'ok', '부족', s.shortage, '감독 부족 자리 (0이어야 합니다)')}
+      ${chip(s.violations ? 'bad' : 'ok', '위반', s.violations, '규칙 위반 칸 (0이어야 합니다)')}
+      ${chip('', '누적', `${s.min}~${s.max}`, '일반 교사 누적 시수 범위 (최소~최대)')}
+      ${chip('', '평균', s.avg.toFixed(1), '일반 교사 평균 누적 시수')}
+      ${chip(s.repeatRooms && model.noRepeatRoom ? 'bad' : '', '교실중복', s.repeatRooms, '같은 교실에 두 번 들어간 횟수')}
+      ${pinCount ? chip('', '📌', pinCount, '직접 고친(고정된) 칸 수') : ''}
+    </span>`;
+  }
+
   renderers.result = function () {
     const model = currentModel();
     const r = state.result;
@@ -604,17 +619,8 @@
     if (running) {
       body = `<div class="panel"><div class="panel-body"><b>배정 계산 중…</b> <span class="muted">수십만 가지 조합을 비교하고 있습니다. 보통 1~3초 걸립니다.</span><div class="progress"><div id="prog" style="width:${Math.round(progress * 100)}%"></div></div></div></div>`;
     } else if (r && ev) {
-      const s = ev.summary;
       body = `
       ${stale ? `<div class="guide" style="background:var(--warn-soft);border-color:#f3d9a8;color:var(--warn)"><b>입력이 바뀜</b><span>배정한 뒤에 과목·교사·예외 등이 바뀌었습니다. 아래 결과는 바뀐 입력으로 다시 검사한 것입니다. <b>다시 돌리기</b>를 누르면 직접 고친 칸은 유지하고 나머지를 새로 배정합니다.</span></div>` : ''}
-      <div class="summary">
-        <div class="stat ${s.shortage ? 'bad' : 'ok'}"><b>${s.shortage}</b><span>감독 부족 자리</span></div>
-        <div class="stat ${s.violations ? 'bad' : 'ok'}"><b>${s.violations}</b><span>규칙 위반 칸</span></div>
-        <div class="stat"><b>${s.min} ~ ${s.max}</b><span>일반 교사 누적 시수 범위</span></div>
-        <div class="stat"><b>${s.avg.toFixed(1)}</b><span>일반 교사 평균 누적</span></div>
-        <div class="stat ${s.repeatRooms && model.noRepeatRoom ? 'bad' : ''}"><b>${s.repeatRooms}</b><span>같은 교실 중복</span></div>
-        <div class="stat"><b>${pinCount}</b><span>직접 고친 칸 📌</span></div>
-      </div>
       <div class="panel result-table-panel">
         <div class="panel-head">
           <div class="seg">${[['grid', '감독표'], ['person', '개인별 시간표'], ['stats', '시수표']].map(([k, l]) => `<button class="${ui.sub === k ? 'active' : ''}" data-act="sub" data-k="${k}">${l}</button>`).join('')}</div>
@@ -642,6 +648,7 @@
       <div class="panel-head">
         <h2>배정 · ${esc(state.term)}</h2>${helpDot('s5')}
         ${r ? `<span class="muted small">배정 ${timeText(r.createdAt)}</span>` : ''}
+        ${kpiHTML(model, ev, pinCount)}
         <span class="spacer"></span>
         ${r ? `${pinCount ? `<button class="btn sm ghost" data-act="unpin-all">📌 고정 모두 풀기</button>` : ''}
         <button class="btn sm ghost danger" data-act="clear-result">결과 지우기</button>
@@ -1140,7 +1147,7 @@
       <h2 id="s5">4. 배정 결과</h2>
       <ol>
         <li><b>배정 전 점검</b>을 봅니다. 빨간 항목(명단 없음, 이름 중복 등)은 해결해야 배정할 수 있습니다. 노란 항목은 배정은 되지만 결과에 영향을 줄 수 있는 것(과목명 불일치, 교사 부족 가능성 등)이고, 참고 항목은 비어 있는 과목 칸 같은 안내입니다.</li>
-        <li><b>배정 시작</b>을 누르면 1~3초 뒤 결과가 나옵니다. 위쪽 요약에서 <b>감독 부족 자리</b>와 <b>규칙 위반 칸</b>이 0인지 먼저 확인하세요.</li>
+        <li><b>배정 시작</b>을 누르면 1~3초 뒤 결과가 나옵니다. 머리줄의 요약 칩에서 <b>부족</b>과 <b>위반</b>이 0인지 먼저 확인하세요(칩에 마우스를 올리면 뜻이 나옵니다).</li>
         <li><b>감독표 / 개인별 시간표 / 시수표</b>를 번갈아 보며 검토합니다. 시수표의 <b>가능 교시</b>는 그 선생님이 이번 시험에서 들어갈 수 있는 교시 수로, 본인 과목 시험이 많거나 고사담당이면 적습니다. 이런 분이 적게 배정되는 것은 규칙 때문이지 오류가 아닙니다.</li>
         <li>마음에 들지 않으면 <b>처음부터 새로 배정</b>(새 조합) 또는 칸을 직접 고칩니다.</li>
         <li><b>엑셀로 저장</b>한 뒤, 다음 회차를 준비할 때 <b>누적 반영 → 다음 회차</b>를 누릅니다.</li>
