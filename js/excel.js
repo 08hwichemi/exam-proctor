@@ -84,6 +84,23 @@
     return out;
   }
 
+  // 이전 회차 결과 엑셀의 "결과_개인별시간표" → { 이름: ['2-3', '1-음악실', ...] } (교실만, 복도 제외)
+  function sheetsToRoomHistory(sheets) {
+    const ws = sheets.find((s) => s.name === '결과_개인별시간표');
+    if (!ws) return {};
+    const out = {};
+    ws.rows.slice(5).forEach((r) => {
+      const name = String(r[1] || '').trim();
+      if (!name || name === '예비') return;
+      r.slice(3).forEach((v) => {
+        const cell = String(v || '').replace(/\(자습\)/g, '').trim();
+        if (!cell || cell.includes('복도') || cell.startsWith('특수') || !/^\d-/.test(cell)) return;
+        (out[name] = out[name] || []).push(cell);
+      });
+    });
+    return out;
+  }
+
   // ---------------------------------------------------------------
   // 결과 저장
   // ---------------------------------------------------------------
@@ -280,5 +297,5 @@
     return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   }
 
-  root.ExcelIO = { readWorkbook, rowsToTeachers, sheetsToCumulative, exportResult, cellText };
+  root.ExcelIO = { readWorkbook, rowsToTeachers, sheetsToCumulative, sheetsToRoomHistory, exportResult, cellText };
 })(typeof window !== 'undefined' ? window : globalThis);

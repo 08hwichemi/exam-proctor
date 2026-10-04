@@ -51,12 +51,13 @@
   // 모달: buttons [{label, value, cls}] → Promise(value)
   function dialog({ title, html, buttons, wide, onOpen }) {
     return new Promise((resolve) => {
+      const btns = buttons || [{ label: '닫기', value: null }];
       const back = document.createElement('div');
       back.className = 'modal-back';
       back.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true">
         <div class="modal-head"><h3>${esc(title)}</h3><button class="icon-btn" data-close aria-label="닫기">✕</button></div>
         <div class="modal-body">${html}</div>
-        <div class="modal-foot">${(buttons || [{ label: '닫기', value: null }]).map((b, i) => `<button class="btn ${b.cls || ''}" data-i="${i}">${esc(b.label)}</button>`).join('')}</div>
+        <div class="modal-foot">${btns.map((b, i) => `<button class="btn ${b.cls || ''}" data-i="${i}">${esc(b.label)}</button>`).join('')}</div>
       </div>`;
       const close = (v) => { back.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
       const onKey = (e) => { if (e.key === 'Escape') close(null); };
@@ -65,7 +66,7 @@
         if (e.target === back || e.target.closest('[data-close]')) return close(null);
         const b = e.target.closest('.modal-foot [data-i]');
         if (b) {
-          const def = buttons[+b.dataset.i];
+          const def = btns[+b.dataset.i];
           close(typeof def.value === 'function' ? def.value(back) : def.value);
         }
       });
@@ -85,7 +86,8 @@
   function defaultState() {
     return {
       version: 2, term: TERMS[0],
-      options: { exclude3rd: true, studyHallClassroom: false, corridors: 2 },
+      options: { exclude3rd: true, studyHallClassroom: false, corridors: 2, noRepeatRoom: true, roomHistoryScope: 'exam', compensate3rd: 1 },
+      roomHistory: {},
       classes: [7, 7, 7], days: [newDay(3)], teachers: [], specials: [{ room: '', teacher: '', hours: '' }],
       result: null, meta: { savedAt: null, backupAt: null, dirty: false },
     };
@@ -115,6 +117,9 @@
     s.specials = (s.specials || []).map((r) => ({ room: r.room || '', teacher: r.teacher || '', hours: r.hours == null ? '' : String(r.hours) }));
     if (s.result && typeof s.result.assign !== 'object') s.result = null;
     if (s.result) s.result.pinned = s.result.pinned || {};
+    const rh = {};
+    if (s.roomHistory && typeof s.roomHistory === 'object') Object.keys(s.roomHistory).forEach((k) => { if (Array.isArray(s.roomHistory[k])) rh[k] = s.roomHistory[k].map(String); });
+    s.roomHistory = rh;
     return s;
   }
 
@@ -240,6 +245,20 @@
         </div>
         ${s.term === '4차 고사' ? `<label class="inline" style="margin-bottom:8px"><input type="checkbox" data-bind="options.exclude3rd" ${s.options.exclude3rd ? 'checked' : ''}> <b style="color:var(--bad)">3학년 담임/부장 배정 제외</b> <span class="muted">(담임 칸이 3-으로 시작하는 선생님)</span></label><br>` : ''}
         <label class="inline"><input type="checkbox" data-bind="options.studyHallClassroom" ${s.options.studyHallClassroom ? 'checked' : ''}> 학년 전체가 자습인 교시에도 <b>교실 감독</b> 배정 <span class="muted">(끄면 복도 감독만)</span></label>
+        <div class="row" style="margin-top:8px">
+          <label class="inline"><input type="checkbox" data-bind="options.noRepeatRoom" data-rerender="setup" ${s.options.noRepeatRoom ? 'checked' : ''}> <b>한 번 들어간 교실에는 다시 넣지 않음</b></label>
+          <select data-bind="options.roomHistoryScope" data-rerender="setup" ${s.options.noRepeatRoom ? '' : 'disabled'}>
+            <option value="exam" ${s.options.roomHistoryScope !== 'year' ? 'selected' : ''}>이번 시험 안에서</option>
+            <option value="year" ${s.options.roomHistoryScope === 'year' ? 'selected' : ''}>올해 이전 회차 교실까지</option>
+          </select>
+          <span class="muted">${s.options.roomHistoryScope === 'year' ? `(교실 이력 ${Object.keys(s.roomHistory || {}).length}명분 보관 중 — 3. 교사 명단에서 이전 결과 엑셀을 불러오면 쌓입니다)` : ''}</span>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <label class="inline"><b>3학년 담임 연간 보정</b>
+            <input type="number" class="num" min="0" max="5" data-bind="options.compensate3rd" data-num value="${s.options.compensate3rd}"> 시간
+          </label>
+          <span class="muted">4차에 3학년 담임/부장을 뺄 예정이면, 1~3차에서 회차당 이만큼 더 배정해 연말 합계를 맞춥니다. (0 = 보정 안 함)</span>
+        </div>
         <p class="hint" style="margin-top:12px">${s.term === TERMS[0]
           ? '1차 고사는 이전 누적 시수를 쓰지 않고 0부터 시작합니다.'
           : `이전 회차까지의 누적 시수(3. 교사 명단의 "이전 누적")를 더해서, 누적이 적은 선생님께 더 배정합니다.`}</p>
@@ -393,7 +412,7 @@
         · <b>과목</b>이 시험 과목과 같으면 그 시험 시간에는 감독에서 빠집니다. 여러 과목은 <code>/</code>로 구분합니다. (예: <code>수학</code>은 <code>수학Ⅰ</code>, <code>수학Ⅱ</code> 시험과도 같은 과목으로 봅니다)<br>
         · <b>구분</b> — 일반: 시수를 고르게 / 고사담당: 1교시에만 / 원로: 교실 감독만, 목표시수까지 / 순회: 복도·자습 감독만 / 제외: 배정 안 함<br>
         · <b>목표시수</b> — 원로: 이 시수까지 채움(상한). 그 밖의 구분: 적어 두면 이 시수를 넘기지 않도록 함(비우면 제한 없음).<br>
-        · <b>이전 누적</b> — 지난 회차까지의 전체 시수. ${prevOff ? '<b>1차 고사에서는 쓰지 않습니다.</b>' : '이전 회차 결과 엑셀에서 한 번에 불러올 수 있습니다.'}
+        · <b>이전 누적</b> — 지난 회차까지의 전체 시수. ${prevOff ? '<b>1차 고사에서는 쓰지 않습니다.</b>' : '이전 회차 결과 엑셀에서 한 번에 불러올 수 있습니다.'} 엑셀에서 불러오면 각 선생님이 들어갔던 교실 이력도 함께 보관합니다${Object.keys(state.roomHistory).length ? ` (지금 ${Object.keys(state.roomHistory).length}명분)` : ''}.
       </p>
       <div class="row" style="margin-bottom:10px">
         <button class="btn" data-act="t-prev-import">📥 이전 회차 결과 엑셀에서 누적 불러오기</button>
@@ -507,6 +526,7 @@
         <div class="stat ${s.violations ? 'bad' : 'ok'}"><b>${s.violations}</b><span>규칙 위반 칸 ⚠</span></div>
         <div class="stat"><b>${s.min} ~ ${s.max}</b><span>일반 교사 전체 누적 시수</span></div>
         <div class="stat"><b>${s.avg.toFixed(1)}</b><span>일반 교사 평균</span></div>
+        <div class="stat ${s.repeatRooms && model.noRepeatRoom ? 'bad' : ''}"><b>${s.repeatRooms}</b><span>같은 교실 중복</span></div>
         <div class="stat"><b>${pinCount}</b><span>직접 고친 칸 📌</span></div>
       </div>
       <p class="hint">칸을 누르면 다른 선생님으로 바꾸거나 맞바꿀 수 있습니다. 직접 고친 칸은 📌로 고정되어, [다시 돌리기]를 해도 그대로 남습니다. 노란색=자습, 보라색=복도, 파란색=본인 시험, ⚠=규칙 위반(마우스를 올리면 이유).</p>
@@ -613,12 +633,12 @@
   function statsTable(model, ev) {
     const bal = ev.stats.filter((s) => s.group === 'balance').map((s) => s.prev + s.total);
     const mx = Math.max(...bal), mn = Math.min(...bal);
-    let h = '<table class="res"><thead><tr><th>연번</th><th>이름</th><th>구분</th><th>과목</th><th>교실</th><th>복도</th><th>자습</th><th>특수실</th><th>이번 합계</th><th>이전 누적</th><th>전체 누적</th><th>목표시수</th></tr></thead><tbody>';
+    let h = '<table class="res"><thead><tr><th>연번</th><th>이름</th><th>구분</th><th>과목</th><th>교실</th><th>복도</th><th>자습</th><th>특수실</th><th>이번 합계</th><th>이전 누적</th><th>전체 누적</th><th>목표시수</th><th title="이 시험에서 감독할 수 있는 교시 수 (본인 시험·예외·구분 규칙을 뺀 것)">가능 교시</th></tr></thead><tbody>';
     ev.stats.forEach((st, i) => {
       const tot = st.prev + st.total;
       const hl = st.group === 'balance' && mx !== mn ? (tot === mx ? 'hi' : tot === mn ? 'lo' : '') : '';
       h += `<tr class="${st.type === '제외' ? 'off' : ''}"><td>${i + 1}</td><td><b>${esc(st.name)}</b></td><td>${esc(st.type)}${st.note ? `<br><small class="muted">${esc(st.note)}</small>` : ''}</td><td class="subjcol">${esc(st.subject)}</td>
-        <td class="num">${st.cls}</td><td class="num">${st.corridor}</td><td class="num">${st.study}</td><td class="num">${st.special || ''}</td><td class="num"><b>${st.total}</b></td><td class="num">${st.prev}</td><td class="num ${hl}"><b>${tot}</b></td><td class="num">${st.target == null ? '' : st.target}</td></tr>`;
+        <td class="num">${st.cls}</td><td class="num">${st.corridor}</td><td class="num">${st.study}</td><td class="num">${st.special || ''}</td><td class="num"><b>${st.total}</b></td><td class="num">${st.prev}</td><td class="num ${hl}"><b>${tot}</b></td><td class="num">${st.target == null ? '' : st.target}</td><td class="num ${st.group === 'balance' && st.avail <= st.total ? 'hi' : ''}" title="${st.group === 'balance' && st.avail <= st.total ? '가능한 교시를 모두 채웠습니다' : ''}">${st.avail}/${model.P}</td></tr>`;
     });
     return h + '</tbody></table>';
   }
@@ -688,6 +708,7 @@
       const reasons = E.slotReasons(model, t, slot);
       const other = sameP.get(t.name);
       if (!other && wouldBe3Consecutive(model, t.name, slot)) reasons.push('3교시 연속');
+      if (model.noRepeatRoom && E.repeatRoom(model, state.result.assign, t.name, slot)) reasons.push('이번 시험에 들어간 교실');
       const info = `이번 ${st.total} · 누적 ${st.prev + st.total}`;
       const item = { t, st, reasons, other, info, sort: st.prev + st.total };
       if (reasons.length) no.push(item);
@@ -779,6 +800,7 @@
       <div class="cand-list">${slots.map((s) => {
         const r = E.slotReasons(model, t, s);
         if (wouldBe3Consecutive(model, name, s)) r.push('3교시 연속');
+        if (model.noRepeatRoom && E.repeatRoom(model, state.result.assign, name, s)) r.push('이번 시험에 들어간 교실');
         const cur = state.result.assign[s.id];
         return `<button class="cand ${r.length ? 'no' : ''}" data-slot="${s.id}"><b>${esc(s.label)}</b> <small>${cur ? esc(cur) : '비어 있음'}${r.length ? ' · ' + esc(r.join(', ')) : ''}</small></button>`;
       }).join('')}</div>`;
@@ -821,6 +843,13 @@
       const st = byName.get(t.name.trim());
       if (!st) return;
       t.prev = String(st.prev + st.total);
+    });
+    if (state.term === TERMS[0]) state.roomHistory = {}; // 새 학년도 시작
+    model.slots.forEach((s) => {
+      const nm = state.result.assign[s.id], k = E.roomKey(s);
+      if (!nm || !k) return;
+      const list = state.roomHistory[nm] || (state.roomHistory[nm] = []);
+      if (!list.includes(k)) list.push(k);
     });
     state.term = next;
     state.result = null;
@@ -879,6 +908,8 @@
         <li><b>배정 회차</b>: 2~4차는 교사 명단의 "이전 누적" 시수를 더해서 누적이 적은 선생님께 더 배정합니다.</li>
         <li><b>3학년 담임/부장 제외</b>: 4차 고사에서만 보입니다. 담임 칸이 <code>3-</code>로 시작하면 배정에서 뺍니다.</li>
         <li><b>전체 자습 시 교실 감독</b>: 끄면 학년 전체가 자습인 교시는 복도 감독만 둡니다.</li>
+        <li><b>한 번 들어간 교실에는 다시 넣지 않음</b>: 같은 선생님을 같은 교실(학년-반)에 두 번 넣지 않습니다. "올해 이전 회차 교실까지"를 고르면 이전 결과 엑셀에서 불러온 교실 이력도 피합니다. 교사 1명이 한 시험에 교실 3~4번, 교실은 20개가 넘어 켜도 부족 자리가 생기지 않습니다.</li>
+        <li><b>3학년 담임 연간 보정</b>: 4차 고사에서 3학년 담임/부장을 빼면 그분들은 연말에 3시간쯤 적게 끝납니다. 1~3차에서 회차당 1시간씩 더 배정하면 연말 차이가 1시간 안쪽으로 줄어듭니다. 4차에도 3학년 담임이 감독한다면 0으로 두세요.</li>
         <li>반 수·일차·교시를 바꾸면 과목·예외 입력칸이 자동으로 맞춰집니다.</li>
       </ul>
       <h2>2. 시험 과목</h2>
@@ -1078,19 +1109,22 @@
         const f = await pickFile('.xlsx');
         if (!f) return;
         try {
-          const cum = X.sheetsToCumulative(await X.readWorkbook(f));
-          let hit = 0;
+          const sheets = await X.readWorkbook(f);
+          const cum = X.sheetsToCumulative(sheets);
+          const rooms = X.sheetsToRoomHistory(sheets);
+          let hit = 0, roomN = 0;
           const miss = [];
           state.teachers.forEach((t) => { const n = t.name.trim(); if (!n) return; if (n in cum) { t.prev = String(cum[n]); hit++; } else miss.push(n); });
+          Object.keys(rooms).forEach((n) => { const set = new Set((state.roomHistory[n] || []).concat(rooms[n])); state.roomHistory[n] = Array.from(set); roomN += rooms[n].length; });
           if (state.term === TERMS[0]) state.term = TERMS[1];
           save(); renderers.teachers(); updateBadges();
-          await dialog({ title: '누적 시수 불러오기', html: `<p>${hit}명의 누적 시수를 넣었습니다.${miss.length ? `<br>파일에 없는 선생님 ${miss.length}명(0으로 시작): ${esc(miss.join(', '))}` : ''}</p><p class="muted">배정 회차: ${esc(state.term)}</p>` });
+          await dialog({ title: '누적 시수 불러오기', html: `<p>${hit}명의 누적 시수를 넣었습니다.${miss.length ? `<br>파일에 없는 선생님 ${miss.length}명(0으로 시작): ${esc(miss.join(', '))}` : ''}</p>${roomN ? `<p>교실 이력 ${roomN}건을 보관했습니다. (1. 기본 설정에서 "올해 이전 회차 교실까지"를 고르면 이 교실들을 피합니다)</p>` : ''}<p class="muted">배정 회차: ${esc(state.term)}</p>` });
         } catch (err) { await dialog({ title: '불러오기 실패', html: `<p>${esc(err.message)}</p>` }); }
         return;
       }
       case 't-prev-clear':
-        if (!(await confirmBox('누적 비우기', '모든 선생님의 이전 누적 시수를 지울까요?', '지우기', 'orange'))) return;
-        state.teachers.forEach((t) => { t.prev = ''; }); save(); renderers.teachers(); return;
+        if (!(await confirmBox('누적 비우기', '모든 선생님의 이전 누적 시수와 보관 중인 교실 이력을 지울까요?', '지우기', 'orange'))) return;
+        state.teachers.forEach((t) => { t.prev = ''; }); state.roomHistory = {}; save(); renderers.teachers(); return;
       case 'sp-add': state.specials.push({ room: '', teacher: '', hours: '' }); save(); return renderers.extras();
       case 'sp-del': state.specials.splice(i, 1); save(); return renderers.extras();
       case 'ex-add': { const d = +el.dataset.d; state.days[d].exceptions.push({ period: '', name: '', reason: '' }); save(); renderers.extras(); const rows = $$(`[data-bind^="days.${d}.exceptions."][data-bind$=".name"]`); if (rows.length) rows[rows.length - 1].focus(); return; }

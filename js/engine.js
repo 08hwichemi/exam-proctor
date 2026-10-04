@@ -152,11 +152,17 @@
   // 입력 → 모델
   // ---------------------------------------------------------------
   function buildModel(state) {
-    const opts = Object.assign({ exclude3rd: true, studyHallClassroom: false, corridors: 2 }, state.options || {});
+    const opts = Object.assign({ exclude3rd: true, studyHallClassroom: false, corridors: 2, noRepeatRoom: false, roomHistoryScope: 'exam', compensate3rd: 0 }, state.options || {});
     const corridors = Math.max(0, Math.min(6, parseInt(opts.corridors, 10) || 0));
     const classes = [0, 1, 2].map((i) => Math.max(1, Math.min(30, parseInt((state.classes || [])[i], 10) || 7)));
     const term = state.term || TERMS[0];
     const usePrev = term !== TERMS[0];
+    // 같은 교실 금지 범위: 'exam' = 이번 시험 안에서만, 'year' = 이전 회차에 들어간 교실(roomHistory)까지
+    const useHistory = usePrev && !!opts.noRepeatRoom && opts.roomHistoryScope === 'year';
+    const roomHistory = state.roomHistory || {};
+    // 3학년 담임 연간 보정: 4차에 빠질 3학년 담임/부장에게 1~3차에서 회차당 N시간씩 더 배정되도록 누적을 낮춰 봄
+    const termIdx = TERMS.indexOf(term);
+    const comp = Math.max(0, Math.min(5, Number(opts.compensate3rd) || 0));
     const issues = []; // {level:'error'|'warn'|'info', msg}
 
     // ---- 교시
@@ -238,12 +244,15 @@
       const target = toIntOrNull(targetRaw);
       if (String(targetRaw == null ? '' : targetRaw).trim() && target == null) issues.push({ level: 'warn', msg: `${name} 선생님의 목표시수 "${targetRaw}"는 숫자가 아니어서 무시합니다.` });
       const prev = usePrev ? (toIntOrNull(raw.prev) || 0) : 0;
+      let prevAdj = prev;
+      if (comp && opts.exclude3rd && termIdx <= 2 && hr.g === 3) prevAdj = prev - comp * (termIdx + 1);
       const sp = specials.filter((r) => r.teacher === name);
       teachers.push({
         ti: teachers.length, name, subject: String(raw.subject || '').trim(), homeroomRaw: String(raw.homeroom || '').trim(),
-        baseType: nt.type, type, note, subs: splitSubjects(raw.subject), homeroom: hr, target, prev,
+        baseType: nt.type, type, note, subs: splitSubjects(raw.subject), homeroom: hr, target, prev, prevAdj,
         specialRooms: sp, specialHours: sp.reduce((a, r) => a + r.hours, 0),
         exceptAll: new Set(), exceptP: new Set(),
+        visited: new Set(useHistory ? (roomHistory[name] || []) : []),
       });
     });
     nameCount.forEach((n, name) => { if (n > 1) issues.push({ level: 'error', msg: `교사 이름 "${name}"이(가) ${n}번 있습니다. 동명이인은 "홍길동A"처럼 구분해 주세요.` }); });
@@ -318,6 +327,7 @@
 
     const model = {
       term, opts, corridors, classes, maxClasses, periods, slots, slotById, teachers, teacherByName,
+      noRepeatRoom: !!opts.noRepeatRoom, useHistory, compensate3rd: comp,
       specials, exceptions: exceptionsList, ownExam, availP, P, T, D: dayCount, issues,
     };
     model.slotOK = (t, s) => slotOK(model, t, s);
@@ -331,7 +341,22 @@
     if (t.type === '순회' && examRoom) return false;
     if (t.type === '원로' && (s.kind === 'corridor' || s.study)) return false;
     if (s.kind === 'class' && t.homeroom.g === s.grade && t.homeroom.c === s.classNo) return false;
+    if (m.noRepeatRoom && t.visited.size) { const k = roomKey(s); if (k && t.visited.has(k)) return false; }
     return true;
+  }
+
+  // 교실 식별자 (복도는 null)
+  function roomKey(s) {
+    if (s.kind === 'class') return `${s.grade}-${s.classNo}`;
+    if (s.kind === 'special') return `${s.grade}-${s.room}`;
+    return null;
+  }
+
+  // 이번 시험 안에서 교사 name 이 slot 과 같은 교실에 이미 들어가 있는지(slot 자신 제외)
+  function repeatRoom(m, assign, name, slot) {
+    const k = roomKey(slot);
+    if (!k) return false;
+    return m.slots.some((s) => s.id !== slot.id && assign[s.id] === name && roomKey(s) === k);
   }
 
   // 사람이 읽을 수 있는 불가 사유(정적)
@@ -348,6 +373,7 @@
     if (t.type === '순회' && examRoom) r.push('순회(시험 교실 불가)');
     if (t.type === '원로' && (s.kind === 'corridor' || s.study)) r.push('원로(복도·자습 불가)');
     if (s.kind === 'class' && t.homeroom.g === s.grade && t.homeroom.c === s.classNo) r.push('본인 담임반');
+    if (m.noRepeatRoom && t.visited.size) { const k = roomKey(s); if (k && t.visited.has(k)) r.push('이전 회차에 들어간 교실'); }
     return r;
   }
 
@@ -424,8 +450,9 @@
       asg[si] = t; at[t * P + s.pi] = si; cnt[t]++;
       if (s.kind === 'corridor' || s.study) sub[t]++; else cls[t]++;
       const k = t * D + s.d; dayCnt[k]++; dayMask[k] |= (1 << s.p);
-      if (s.kind === 'class') {
-        const key = s.grade * 100 + s.classNo, mp = roomMaps[t], v = (mp.get(key) || 0) + 1;
+      const key = roomKey(s);
+      if (key) {
+        const mp = roomMaps[t], v = (mp.get(key) || 0) + 1;
         mp.set(key, v); if (v > 1) roomDup[t]++;
       }
     }
@@ -434,17 +461,26 @@
       asg[si] = -1; at[t * P + s.pi] = -1; cnt[t]--;
       if (s.kind === 'corridor' || s.study) sub[t]--; else cls[t]--;
       const k = t * D + s.d; dayCnt[k]--; dayMask[k] &= ~(1 << s.p);
-      if (s.kind === 'class') {
-        const key = s.grade * 100 + s.classNo, mp = roomMaps[t], v = mp.get(key) - 1;
+      const key = roomKey(s);
+      if (key) {
+        const mp = roomMaps[t], v = mp.get(key) - 1;
         if (v > 0) { mp.set(key, v); roomDup[t]--; } else mp.delete(key);
       }
+    }
+
+    // 같은 교실 금지(하드 옵션): 이번 시험에서 이미 들어간 교실이면 불가
+    const hardRoom = !!m.noRepeatRoom;
+    function roomOK(t, si) {
+      if (!hardRoom) return true;
+      const key = roomKey(m.slots[si]);
+      return !key || !roomMaps[t].has(key);
     }
 
     function cost(t) {
       const tt = teachers[t], k = cnt[t], g = grp[t];
       let c = 0;
-      if (g === 'balance') { const h = tt.prev + k; c += W.TOT * h * h + W.SUB * sub[t] * sub[t] + W.CLS * cls[t] * cls[t]; }
-      else if (g === 'itinerant') { const h = tt.prev + k; c += W.TOT * h * h; }
+      if (g === 'balance') { const h = tt.prevAdj + k; c += W.TOT * h * h + W.SUB * sub[t] * sub[t] + W.CLS * cls[t] * cls[t]; }
+      else if (g === 'itinerant') { const h = tt.prevAdj + k; c += W.TOT * h * h; }
       else if (g === 'senior' && tt.target != null && k < tt.target) c += W.SENIOR * (tt.target - k);
       if (tt.type !== '원로' && tt.target != null && k > tt.target) c += W.OVER * (k - tt.target);
       for (let d = 0, b = t * D; d < D; d++) {
@@ -466,6 +502,7 @@
     function canAdd(t, si) {
       const s = m.slots[si], tt = teachers[t];
       if (at[t * P + s.pi] !== -1) return false;
+      if (!roomOK(t, si)) return false;
       const mk = dayMask[t * D + s.d] | (1 << s.p);
       if (mk & (mk >> 1) & (mk >> 2)) return false;
       if (tt.type === '원로' && tt.target != null) {
@@ -545,7 +582,9 @@
         // 같은 교시 안에서 자리 맞바꾸기
         if (t1 < 0 || pinned[s2] || !slotOK(m, teachers[t1], m.slots[s2])) return;
         const before = cost(t1) + cost(t2);
-        remove(t1, si); remove(t2, s2); add(t1, s2); add(t2, si);
+        remove(t1, si); remove(t2, s2);
+        if (!roomOK(t1, s2) || !roomOK(t2, si)) { add(t1, si); add(t2, s2); return; }
+        add(t1, s2); add(t2, si);
         const delta = cost(t1) + cost(t2) - before;
         if (accept(delta)) { cur += delta; return; }
         remove(t1, s2); remove(t2, si); add(t1, si); add(t2, s2);
@@ -562,7 +601,9 @@
       if (!slotOK(m, teachers[t1], sb) || !slotOK(m, teachers[t2], sa)) return;
       if (at[t1 * P + sb.pi] !== -1 || at[t2 * P + sa.pi] !== -1) return;
       const before = cost(t1) + cost(t2);
-      remove(t1, a); remove(t2, b); add(t1, b); add(t2, a);
+      remove(t1, a); remove(t2, b);
+      if (!roomOK(t1, b) || !roomOK(t2, a)) { add(t1, a); add(t2, b); return; }
+      add(t1, b); add(t2, a);
       const ok = dayOK(t1, sa.d) && dayOK(t1, sb.d) && dayOK(t2, sa.d) && dayOK(t2, sb.d);
       const delta = ok ? cost(t1) + cost(t2) - before : Infinity;
       if (ok && accept(delta)) { cur += delta; return; }
@@ -617,6 +658,7 @@
       name: t.name, type: t.type, baseType: t.baseType, subject: t.subject, note: t.note,
       cls: 0, corridor: 0, study: 0, special: t.specialHours, total: 0, prev: t.prev, target: t.target,
       group: group(t), cells: new Array(P).fill(null),
+      avail: (() => { let c = 0; for (let p = 0; p < P; p++) if (m.availP[t.ti * P + p]) c++; return c; })(),
     }));
     const violations = {}; // slotId → [사유]
     const busy = new Map(); // `${ti}-${pi}` → [slotId]
@@ -643,6 +685,19 @@
     busy.forEach((ids) => {
       if (ids.length > 1) ids.forEach((id) => { (violations[id] = violations[id] || []).push('같은 교시 중복 배정'); });
     });
+
+    // 같은 교실 재방문(옵션이 켜져 있을 때만 위반으로 표시)
+    const roomVisits = new Map(); // `${name}|${roomKey}` → [slotId]
+    m.slots.forEach((s) => {
+      const name = (assign && assign[s.id]) || '';
+      const k = roomKey(s);
+      if (!name || !k) return;
+      const kk = `${name}|${k}`;
+      if (!roomVisits.has(kk)) roomVisits.set(kk, []);
+      roomVisits.get(kk).push(s.id);
+    });
+    let repeatCount = 0;
+    roomVisits.forEach((ids) => { if (ids.length > 1) { repeatCount += ids.length - 1; if (m.noRepeatRoom) ids.forEach((id) => { (violations[id] = violations[id] || []).push('같은 교실 재방문'); }); } });
 
     // 3교시 연속, 원로 상한
     m.teachers.forEach((t) => {
@@ -685,6 +740,7 @@
     const bal = stats.filter((s) => s.group === 'balance').map((s) => s.prev + s.total);
     const summary = {
       shortage,
+      repeatRooms: repeatCount,
       violations: Object.keys(violations).length,
       min: bal.length ? Math.min(...bal) : 0,
       max: bal.length ? Math.max(...bal) : 0,
@@ -710,7 +766,7 @@
 
   const Engine = {
     TYPES, TERMS, W, norm, splitSubjects, subjectMatches, normalizeType, parseHomeroom, parsePeriodValue, toIntOrNull,
-    parseCell, cellLabel, buildModel, slotOK, slotReasons, createOptimizer, optimize, evaluate, inputSignature,
+    parseCell, cellLabel, buildModel, slotOK, slotReasons, roomKey, repeatRoom, createOptimizer, optimize, evaluate, inputSignature,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   else root.Engine = Engine;
