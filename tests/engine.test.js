@@ -124,7 +124,8 @@ function describe(label, model, ev) {
     return mx;
   });
   const range = (a) => `${Math.min(...a)}~${Math.max(...a)}`;
-  console.log(`  ${label}: 부족 ${ev.summary.shortage}, 위반칸 ${ev.summary.violations}, 누적합계 ${range(tot)}, 이번시수 ${range(thisTerm)}, 복도+자습 ${range(sub)}, 하루최대 ${Math.max(...dayMax)}`);
+  const corr = bal.map((s) => s.corridor), stu = bal.map((s) => s.study);
+  console.log(`  ${label}: 부족 ${ev.summary.shortage}, 위반칸 ${ev.summary.violations}, 누적합계 ${range(tot)}, 이번시수 ${range(thisTerm)}, 복도+자습 ${range(sub)} (복도 ${range(corr)}, 자습 ${range(stu)}), 하루최대 ${Math.max(...dayMax)}`);
   return { spread: Math.max(...tot) - Math.min(...tot), shortage: ev.summary.shortage, violations: ev.summary.violations };
 }
 
@@ -218,5 +219,25 @@ assert.strictEqual(worse, 0, '새 엔진이 기존 방식보다 나쁜 경우가
   state.term = '4차 고사';
   assert.ok(E.buildModel(state).teachers.every((t) => t.prevAdj === t.prev));
   console.log('3학년 담임 보정 테스트 통과');
+}
+// ---- 복도·자습을 따로 고르게: 교사 수가 적어 1인당 복도·자습이 2회 이상 될 때, 한 사람이 복도만/자습만 맡지 않음
+{
+  const state = makeState(1, '1차 고사');
+  state.options.studyHallClassroom = true;
+  state.days[1].subjects[2][2] = { name: '자습', study: [], exclude: [] };
+  state.days[0].subjects[1][0].study = [1, 2, 3];
+  state.teachers = state.teachers.filter((t, i) => i < 10 || i >= 40 || (i - 10) % 3 !== 2).slice(0, 50);
+  const model = E.buildModel(state);
+  const opt = E.createOptimizer(model, { seed: 1 });
+  while (opt.step(50000) < 1) { /* 끝까지 */ }
+  const ev = E.evaluate(model, opt.result().assign);
+  const bal = ev.stats.filter((s) => s.group === 'balance');
+  assert.strictEqual(ev.summary.shortage, 0);
+  assert.ok(bal.some((s) => s.corridor + s.study >= 2), '1인당 복도+자습이 2회 이상인 교사가 있어야 의미 있는 검사');
+  const corrOnly = bal.filter((s) => s.corridor >= 2 && s.study === 0).length;
+  const stuOnly = bal.filter((s) => s.study >= 2 && s.corridor === 0).length;
+  assert.ok(corrOnly <= 2, `복도만 2회 이상인 교사 ${corrOnly}명`);
+  assert.ok(stuOnly <= 2, `자습만 2회 이상인 교사 ${stuOnly}명`);
+  console.log(`복도·자습 분리 균형 테스트 통과 (복도만 ${corrOnly}명, 자습만 ${stuOnly}명)`);
 }
 console.log('\n통합 테스트 통과');

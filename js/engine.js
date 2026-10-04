@@ -18,6 +18,7 @@
     SENIOR: 5000,   // 원로 교사 목표시수 미달 1시간
     TOT: 1000,      // 총 시수(누적 포함) 편차
     SUB: 300,       // 복도+자습 시수 편차
+    KIND: 150,      // 복도·자습 각각의 편차 (한 사람이 복도만/자습만 하지 않게)
     CLS: 300,       // 교실 시수 편차
     DAY: 100,       // 하루에 몰림
     CONS: 40,       // 두 교시 연속
@@ -438,13 +439,13 @@
     // 상태
     const asg = new Int32Array(S);
     const at = new Int32Array(T * P);
-    const cnt = new Int32Array(T), cls = new Int32Array(T), sub = new Int32Array(T);
+    const cnt = new Int32Array(T), cls = new Int32Array(T), sub = new Int32Array(T), corr = new Int32Array(T), stu = new Int32Array(T);
     const dayCnt = new Int32Array(T * D), dayMask = new Int32Array(T * D);
     const roomMaps = teachers.map(() => new Map());
     const roomDup = new Int32Array(T);
 
     function reset() {
-      asg.fill(-1); at.fill(-1); cnt.fill(0); cls.fill(0); sub.fill(0); dayCnt.fill(0); dayMask.fill(0); roomDup.fill(0);
+      asg.fill(-1); at.fill(-1); cnt.fill(0); cls.fill(0); sub.fill(0); corr.fill(0); stu.fill(0); dayCnt.fill(0); dayMask.fill(0); roomDup.fill(0);
       roomMaps.forEach((mp) => mp.clear());
       for (let i = 0; i < S; i++) if (pinned[i] && pinT[i] >= 0) {
         if (at[pinT[i] * P + m.slots[i].pi] === -1) add(pinT[i], i);
@@ -455,7 +456,7 @@
     function add(t, si) {
       const s = m.slots[si];
       asg[si] = t; at[t * P + s.pi] = si; cnt[t]++;
-      if (s.kind === 'corridor' || s.study) sub[t]++; else cls[t]++;
+      if (s.kind === 'corridor') { sub[t]++; corr[t]++; } else if (s.study) { sub[t]++; stu[t]++; } else cls[t]++;
       const k = t * D + s.d; dayCnt[k]++; dayMask[k] |= (1 << s.p);
       const key = roomKey(s);
       if (key) {
@@ -466,7 +467,7 @@
     function remove(t, si) {
       const s = m.slots[si];
       asg[si] = -1; at[t * P + s.pi] = -1; cnt[t]--;
-      if (s.kind === 'corridor' || s.study) sub[t]--; else cls[t]--;
+      if (s.kind === 'corridor') { sub[t]--; corr[t]--; } else if (s.study) { sub[t]--; stu[t]--; } else cls[t]--;
       const k = t * D + s.d; dayCnt[k]--; dayMask[k] &= ~(1 << s.p);
       const key = roomKey(s);
       if (key) {
@@ -486,7 +487,7 @@
     function cost(t) {
       const tt = teachers[t], k = cnt[t], g = grp[t];
       let c = 0;
-      if (g === 'balance') { const h = tt.prevAdj + k; c += W.TOT * h * h + W.SUB * sub[t] * sub[t] + W.CLS * cls[t] * cls[t]; }
+      if (g === 'balance') { const h = tt.prevAdj + k; c += W.TOT * h * h + W.SUB * sub[t] * sub[t] + W.CLS * cls[t] * cls[t] + W.KIND * (corr[t] * corr[t] + stu[t] * stu[t]); }
       else if (g === 'itinerant') { const h = tt.prevAdj + k; c += W.TOT * h * h; }
       else if (g === 'senior' && tt.target != null && k < tt.target) c += W.SENIOR * (tt.target - k);
       if (tt.type !== '원로' && tt.target != null && k > tt.target) c += W.OVER * (k - tt.target);
