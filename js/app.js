@@ -386,7 +386,7 @@
     const rooms = fullStudy && !state.options.studyHallClassroom ? 0 : open.length;
     const parts = [];
     if (rooms) parts.push(`교실 ${rooms}`);
-    if (pc.special) parts.push('추가반');
+    if (pc.special) parts.push('추가반 1');
     if (state.options.corridors) parts.push(`복도 ${state.options.corridors}`);
     let text = parts.join(' · ');
     if (fullStudy) text = '전체자습 · ' + text;
@@ -406,12 +406,15 @@
       <div class="sc-row">
         <input class="sc-name" data-subjpart="${key},0" value="${esc(parts[0] || '')}" placeholder="${multi ? '과목 1' : '과목명 (비우면 시험 없음)'}">
         ${multi ? `<input class="sc-name" data-subjpart="${key},1" value="${esc(parts.slice(1).join('/'))}" placeholder="과목 2">` : ''}
-        ${cell.special ? `<input class="sc-room" data-bind="${b}.room" data-subj="${key}" value="${esc(cell.room)}" placeholder="장소" title="추가반 장소 (예: 음악실)">` : ''}
         <button class="sc-mini ${multi ? 'on' : ''}" data-act="subj-multi" data-d="${d}" data-p="${p}" data-g="${g}" title="${multi ? '두 번째 과목 칸 닫기' : '같은 교시에 시험 과목이 둘일 때'}">${multi ? '−과목' : '+과목'}</button>
         <button class="sc-mini sp ${cell.special ? 'on' : ''}" data-act="sp-toggle" data-d="${d}" data-p="${p}" data-g="${g}" title="${cell.special ? '추가반 닫기' : '이동수업 등으로 교실이 하나 더 필요할 때'}">${cell.special ? '추가반✓' : '+추가반'}</button>
       </div>
       <div class="sc-row"><span class="chips study"><button class="chips-lbl" data-act="chip-all" data-kind="study" data-d="${d}" data-p="${p}" data-g="${g}" title="전체 자습 켜기/끄기">자습</button>${chips('study', cell.study)}</span></div>
-      <div class="sc-row"><span class="chips excl"><button class="chips-lbl" data-act="chip-all" data-kind="exclude" data-d="${d}" data-p="${p}" data-g="${g}" title="전체 제외 켜기/끄기">제외</button>${chips('exclude', cell.exclude)}</span><span class="sc-sum ${sum.cls}" data-sum="${key}" title="${esc(sum.text)}">${esc(sum.text)}</span></div>
+      <div class="sc-row"><span class="chips excl"><button class="chips-lbl" data-act="chip-all" data-kind="exclude" data-d="${d}" data-p="${p}" data-g="${g}" title="전체 제외 켜기/끄기">제외</button>${chips('exclude', cell.exclude)}</span></div>
+      <div class="sc-row sc-foot">
+        ${cell.special ? `<label class="sc-roomwrap"><span>추가반</span><input class="sc-room" data-bind="${b}.room" data-subj="${key}" value="${esc(cell.room)}" placeholder="장소 (예: 음악실)"></label>` : ''}
+        <span class="sc-sum ${sum.cls}" data-sum="${key}">${esc(sum.text)}</span>
+      </div>
     </div>`;
   }
 
@@ -514,12 +517,12 @@
         </div>
       </div>
 
-      <div class="side-col">
+      <div class="side-grid">
         <div class="panel">
           ${panelHead('특수실', 's4-special', '', '<button class="btn sm" data-act="sp-add">+ 추가</button>')}
           <div class="panel-body flush">
           <table class="grid dense">
-            <thead><tr><th>명칭</th><th>지정자</th><th style="width:64px">시수</th><th style="width:30px"></th></tr></thead>
+            <thead><tr><th>명칭</th><th>지정자</th><th style="width:56px">시수</th><th style="width:26px"></th></tr></thead>
             <tbody>${state.specials.map((r, i) => `<tr>
               <td><input data-bind="specials.${i}.room" value="${esc(r.room)}" placeholder="예: 특수학급"></td>
               <td><input data-bind="specials.${i}.teacher" data-namecheck value="${esc(r.teacher)}" list="teacherNames" class="${bad(r.teacher) ? 'bad' : ''}" placeholder="명단에서 선택"></td>
@@ -532,24 +535,22 @@
         </div>
 
         <div class="panel">
-          ${panelHead('일차·교시별 예외 감독자', 's4-exceptions')}
-          <div class="panel-body ex-grid" style="padding:8px">
-          ${state.days.map((day, d) => `
-            <div class="day-card day-c${d % 4}">
-              <div class="day-head"><span class="day-pill day-c${d % 4}">${d + 1}일차</span><b>${esc(day.date) || ''}</b><span class="spacer"></span><button class="btn sm" data-act="ex-add" data-d="${d}">+ 추가</button></div>
-              <table class="grid dense">
-                ${day.exceptions.length ? `<thead><tr><th style="width:66px">교시</th><th>이름</th><th>사유</th><th style="width:26px"></th></tr></thead>` : ''}
-                <tbody>${day.exceptions.map((x, i) => {
-                  const pv = E.parsePeriodValue(x.period);
-                  const opts = ['<option value="">선택</option>'].concat(range(1, day.periods).map((p) => `<option value="${p}" ${pv === p ? 'selected' : ''}>${p}교시</option>`), [`<option value="전체" ${pv === 'all' ? 'selected' : ''}>종일</option>`]);
-                  return `<tr>
-                  <td><select data-bind="days.${d}.exceptions.${i}.period">${opts.join('')}</select></td>
-                  <td><input data-bind="days.${d}.exceptions.${i}.name" data-namecheck value="${esc(x.name)}" list="teacherNames" class="${bad(x.name) ? 'bad' : ''}" placeholder="명단에서 선택"></td>
-                  <td><input class="left" data-bind="days.${d}.exceptions.${i}.reason" value="${esc(x.reason)}" placeholder="출장, 연가 등"></td>
-                  <td><button class="icon-btn" data-act="ex-del" data-d="${d}" data-i="${i}">✕</button></td></tr>`;
-                }).join('') || '<tr><td class="muted" style="padding:8px 12px; text-align:left; height:auto">예외 없음</td></tr>'}</tbody>
-              </table>
-            </div>`).join('')}
+          ${panelHead('일차·교시별 예외 감독자', 's4-exceptions', '', '<button class="btn sm" data-act="ex-add">+ 추가</button>')}
+          <div class="panel-body flush">
+          <table class="grid dense">
+            <thead><tr><th style="width:92px">일차</th><th style="width:84px">교시</th><th style="width:120px">이름</th><th>사유</th><th style="width:26px"></th></tr></thead>
+            <tbody>${state.days.flatMap((day, d) => day.exceptions.map((x, i) => {
+              const pv = E.parsePeriodValue(x.period);
+              const popts = ['<option value="">선택</option>'].concat(range(1, day.periods).map((p) => `<option value="${p}" ${pv === p ? 'selected' : ''}>${p}교시</option>`), [`<option value="전체" ${pv === 'all' ? 'selected' : ''}>종일</option>`]);
+              const dopts = state.days.map((dd, k) => `<option value="${k}" ${k === d ? 'selected' : ''}>${k + 1}일차${dd.date ? ' ' + esc(dd.date) : ''}</option>`);
+              return `<tr>
+              <td><select class="day-sel day-c${d % 4}" data-exmove="${d},${i}" title="일차">${dopts.join('')}</select></td>
+              <td><select data-bind="days.${d}.exceptions.${i}.period">${popts.join('')}</select></td>
+              <td><input data-bind="days.${d}.exceptions.${i}.name" data-namecheck value="${esc(x.name)}" list="teacherNames" class="${bad(x.name) ? 'bad' : ''}" placeholder="명단에서 선택"></td>
+              <td><input class="left" data-bind="days.${d}.exceptions.${i}.reason" value="${esc(x.reason)}" placeholder="출장, 연가 등"></td>
+              <td><button class="icon-btn" data-act="ex-del" data-d="${d}" data-i="${i}">✕</button></td></tr>`;
+            })).join('') || '<tr><td colspan="5" class="muted" style="padding:14px">예외 없음 — 출장·연가·수업 등으로 특정 교시에 감독할 수 없는 선생님이 있으면 <b>+ 추가</b></td></tr>'}</tbody>
+          </table>
           </div>
           <div class="panel-foot muted small">명단에 없는 이름은 빨갛게 표시되고 적용되지 않습니다. 종일 자리를 비우면 교시를 "종일"로 고릅니다.</div>
         </div>
@@ -614,7 +615,7 @@
         <div class="stat ${s.repeatRooms && model.noRepeatRoom ? 'bad' : ''}"><b>${s.repeatRooms}</b><span>같은 교실 중복</span></div>
         <div class="stat"><b>${pinCount}</b><span>직접 고친 칸 📌</span></div>
       </div>
-      <div class="panel">
+      <div class="panel result-table-panel">
         <div class="panel-head">
           <div class="seg">${[['grid', '감독표'], ['person', '개인별 시간표'], ['stats', '시수표']].map(([k, l]) => `<button class="${ui.sub === k ? 'active' : ''}" data-act="sub" data-k="${k}">${l}</button>`).join('')}</div>
           <span class="legend-row" style="padding:0">
@@ -1131,7 +1132,7 @@
       <p>특수학급처럼 시험 기간 내내 한 선생님이 따로 자리를 지키는 곳입니다. 지정자는 일반 감독에서 빠지고 결과에 "특수(명칭)"으로 표시되며, 적어 둔 시수가 그 선생님의 이번 회차 시수에 더해져 시수표와 누적에 반영됩니다.</p>
       <h4 id="s4-exceptions">일차·교시별 예외 감독자</h4>
       <ul>
-        <li>출장·연가·수업 등으로 특정 교시에 감독할 수 없는 선생님을 일차별로 적습니다. 교시를 고르고 이름을 명단에서 선택합니다. 종일 자리를 비우면 교시를 <b>종일</b>로 고릅니다.</li>
+        <li>출장·연가·수업 등으로 특정 교시에 감독할 수 없는 선생님을 일차별로 적습니다. <b>+ 추가</b>로 줄을 만들고 일차·교시를 고른 뒤 이름을 명단에서 선택합니다. 종일 자리를 비우면 교시를 <b>종일</b>로 고릅니다.</li>
         <li>명단에 없는 이름은 빨갛게 표시되고 적용되지 않습니다. 이름 뒤 공백이나 오타가 흔한 원인입니다.</li>
         <li>예외로 적힌 교시에는 감독뿐 아니라 예비 명단에서도 빠집니다. 사유는 결과_감독표의 비고 칸에 함께 적힙니다.</li>
       </ul>
@@ -1202,6 +1203,17 @@
 
   document.addEventListener('input', (e) => {
     const el = e.target;
+    if (el.dataset && el.dataset.exmove) {
+      const [d, i] = el.dataset.exmove.split(',').map(Number);
+      const nd = +el.value;
+      if (nd !== d && state.days[nd]) {
+        const [row] = state.days[d].exceptions.splice(i, 1);
+        row.period = '';
+        state.days[nd].exceptions.push(row);
+        save(); renderers.teachers(); updateBadges();
+      }
+      return;
+    }
     if (el.dataset && el.dataset.subjpart) {
       const [d, p, g] = el.dataset.subjpart.split(',').map(Number);
       const td = el.closest('td');
@@ -1419,7 +1431,14 @@
         state.teachers.forEach((t) => { t.prev = ''; }); state.roomHistory = {}; save(); renderers.teachers(); return;
       case 'sp-add': state.specials.push({ room: '', teacher: '', hours: '' }); save(); renderers.teachers(); { const inp = $$('[data-bind^="specials."][data-bind$=".room"]').pop(); if (inp) inp.focus(); } return;
       case 'sp-del': state.specials.splice(i, 1); save(); renderers.teachers(); updateBadges(); return;
-      case 'ex-add': { const d = +el.dataset.d; state.days[d].exceptions.push({ period: '', name: '', reason: '' }); save(); renderers.teachers(); const rows = $$(`[data-bind^="days.${d}.exceptions."][data-bind$=".period"]`); if (rows.length) rows[rows.length - 1].focus(); return; }
+      case 'ex-add': {
+        let d = el.dataset.d != null ? +el.dataset.d : -1;
+        if (d < 0) { d = 0; state.days.forEach((day, k) => { if (day.exceptions.length) d = k; }); }
+        state.days[d].exceptions.push({ period: '', name: '', reason: '' });
+        save(); renderers.teachers();
+        const rows = $$(`[data-bind^="days.${d}.exceptions."][data-bind$=".period"]`); if (rows.length) rows[rows.length - 1].focus();
+        return;
+      }
       case 'ex-del': state.days[+el.dataset.d].exceptions.splice(i, 1); save(); renderers.teachers(); updateBadges(); return;
       case 'run': return runAssign(false);
       case 'rerun': return runAssign(true);

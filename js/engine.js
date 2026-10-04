@@ -61,9 +61,10 @@
 
   function parseHomeroom(raw) {
     const s = String(raw == null ? '' : raw).normalize('NFKC').trim();
-    if (!s) return { g: null, c: null, head: false, ok: true };
+    if (!s || /^(비담임|담임아님|없음|해당없음|무|없|x|-|—|·|\.)$/i.test(s)) return { g: null, c: null, head: false, ok: true };
     const nums = s.match(/\d+/g) || [];
     const head = s.includes('부장');
+    if (head && !nums.length) return { g: null, c: null, head: true, ok: true }; // 학년 없는 부장(교무부장 등): 담임 아님
     const g = nums.length >= 1 ? parseInt(nums[0], 10) : null;
     const c = nums.length >= 2 && !head ? parseInt(nums[1], 10) : null;
     return { g, c, head, ok: g != null && (c != null || head) };
