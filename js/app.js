@@ -213,9 +213,8 @@
   // ---------------------------------------------------------------
   const STEPS = [
     { key: 'setup', title: '기본 설정', next: '시험 과목을 교시별로 입력합니다.' },
-    { key: 'subjects', title: '시험 과목', next: '교사 명단을 엑셀에서 불러오거나 붙여넣습니다.' },
-    { key: 'teachers', title: '교사 명단', next: '특수실 담당과 교시별 예외(출장·연가)를 적습니다. 없으면 건너뛰어도 됩니다.' },
-    { key: 'extras', title: '특수실 · 예외', next: '배정을 실행하고 결과를 검토한 뒤 엑셀로 저장합니다.' },
+    { key: 'subjects', title: '시험 과목', next: '교사 명단을 엑셀에서 불러오고, 특수실 담당과 교시별 예외(출장·연가)를 적습니다.' },
+    { key: 'teachers', title: '교사 명단 · 예외', next: '배정을 실행하고 결과를 검토한 뒤 엑셀로 저장합니다.' },
     { key: 'result', title: '배정 결과', next: '' },
   ];
   const stepIndex = (k) => STEPS.findIndex((s) => s.key === k);
@@ -260,10 +259,9 @@
     const sp = subjectProgress();
     set('subjects', sp.filled ? `${sp.total}칸 중 ${sp.filled}칸 입력` : '아직 입력 전', sp.filled ? 'done' : '');
     const nT = state.teachers.filter((t) => t.name.trim()).length;
-    set('teachers', nT ? `${nT}명` : '명단 없음', nT ? 'done' : '');
     const nSp = state.specials.filter((r) => r.room.trim() && r.teacher.trim()).length;
     const nEx = state.days.reduce((a, d) => a + d.exceptions.filter((x) => x.name.trim()).length, 0);
-    set('extras', `특수실 ${nSp} · 예외 ${nEx}`, 'done');
+    set('teachers', nT ? `${nT}명 · 특수실 ${nSp} · 예외 ${nEx}` : '명단 없음', nT ? 'done' : '');
     const err = model.issues.filter((i) => i.level === 'error').length;
     const warn = model.issues.filter((i) => i.level === 'warn').length;
     if (err) set('result', `확인 필요 ${err}건`, 'bad');
@@ -302,7 +300,7 @@
     const histN = Object.keys(s.roomHistory || {}).length;
     $('#tab-setup').innerHTML = `
     ${guide(['배정 회차와 학년별 반 수를 확인합니다.', '시험 일차를 추가하고 날짜·교시 수를 적습니다.', '옵션은 기본값 그대로 두어도 됩니다.'], 's1')}
-    <div class="grid-3">
+    <div class="grid-2">
       <div class="panel">
         ${panelHead('회차와 옵션', 's1-options')}
         <div class="panel-body">
@@ -351,33 +349,22 @@
             <span class="muted small">반 수를 바꾸면 과목 입력의 자습/제외 버튼 개수가 바로 맞춰집니다.</span>
           </div>
           <table class="grid">
-            <thead><tr><th style="width:64px">일차</th><th>시험일</th><th style="width:90px">교시 수</th><th style="width:40px"></th></tr></thead>
+            <thead><tr><th style="width:72px">일차</th><th>시험일</th><th style="width:90px">교시 수</th><th style="width:40px"></th></tr></thead>
             <tbody>${s.days.map((d, i) => `<tr>
-              <td><b>${i + 1}일차</b></td>
+              <td><span class="day-pill day-c${i % 4}">${i + 1}일차</span></td>
               <td><input data-bind="days.${i}.date" value="${esc(d.date)}" placeholder="예: 4/27 (월)"></td>
               <td><input type="number" min="1" max="10" data-bind="days.${i}.periods" data-num value="${d.periods}"></td>
               <td><button class="icon-btn" data-act="day-del" data-i="${i}" title="이 일차 삭제">✕</button></td>
             </tr>`).join('')}</tbody>
           </table>
-          <p class="muted small" style="margin-top:8px">일차·교시 수를 바꾸면 2단계 과목 칸과 4단계 예외 칸이 자동으로 맞춰집니다.</p>
+          <p class="muted small" style="margin-top:8px">일차·교시 수를 바꾸면 2단계 과목 칸과 3단계 예외 칸이 자동으로 맞춰집니다.</p>
         </div>
       </div>
-
-      <div class="panel">
-        ${panelHead('자료 보관', 's0-backup')}
-        <div class="panel-body">
-          <p class="small" style="margin-bottom:8px">입력한 내용은 <b>이 컴퓨터의 이 브라우저</b>에 자동 저장됩니다. 다른 컴퓨터로 옮기거나 브라우저 기록 삭제에 대비하려면 백업 파일을 받아 두세요. 백업 파일 하나에 설정·과목·교사·예외·배정 결과(직접 고친 칸 포함)가 모두 들어 있습니다.</p>
-          <div class="row tight">
-            <button class="btn primary" data-act="backup-save">백업 파일 저장</button>
-            <button class="btn" data-act="backup-load">백업 불러오기</button>
-          </div>
-          <p class="muted small" style="margin-top:8px">마지막 백업: ${s.meta.backupAt ? timeText(s.meta.backupAt) : '없음'} · 예전 파이썬 프로그램의 DATA SAVE 파일(.json)도 불러올 수 있습니다.</p>
-          <div class="row" style="margin-top:12px; padding-top:10px; border-top:1px solid var(--line)">
-            <button class="btn sm danger" data-act="reset-all">전체 초기화</button>
-            <span class="muted small">모든 입력과 결과를 지우고 처음 상태로 돌립니다.</span>
-          </div>
-        </div>
-      </div>
+    </div>
+    <div class="row small muted" style="padding:0 4px 10px">
+      <span>자료는 이 브라우저에 자동 저장됩니다. 다른 컴퓨터에서 쓰려면 상단 <b>백업 저장</b>으로 파일을 받아 두세요. 마지막 백업: ${s.meta.backupAt ? timeText(s.meta.backupAt) : '없음'}</span>
+      <span class="spacer"></span>
+      <button class="btn sm ghost danger" data-act="reset-all">전체 초기화</button>
     </div>
     ${stepNav('setup')}`;
   };
@@ -413,13 +400,10 @@
       <div class="sc-row">
         <input class="sc-name" data-bind="${b}.name" data-subj="${d},${p},${g}" value="${esc(cell.name)}" placeholder="과목명 (비우면 시험 없음)">
         <button class="sc-sp ${cell.special ? 'on' : ''}" data-act="sp-toggle" data-d="${d}" data-p="${p}" data-g="${g}" title="이동수업 등으로 교실이 하나 더 필요할 때">${cell.special ? '추가반 ✓' : '+ 추가반'}</button>
-        ${cell.special ? `<input class="sc-room" data-bind="${b}.room" data-subj="${d},${p},${g}" value="${esc(cell.room)}" placeholder="장소 (예: 음악실)">` : ''}
       </div>
-      <div class="sc-row">
-        <span class="chips study"><b>자습</b><button class="chip all ${allOn ? 'on' : ''}" data-act="chip-all" data-d="${d}" data-p="${p}" data-g="${g}" title="전체 자습">전</button>${chips('study', cell.study)}</span>
-        <span class="chips excl"><b>제외</b>${chips('exclude', cell.exclude)}</span>
-        <span class="sc-sum ${sum.cls}" data-sum="${d},${p},${g}">${esc(sum.text)}</span>
-      </div>
+      ${cell.special ? `<div class="sc-row"><input class="sc-room" data-bind="${b}.room" data-subj="${d},${p},${g}" value="${esc(cell.room)}" placeholder="추가반 장소 (예: 음악실)"></div>` : ''}
+      <div class="sc-row"><span class="chips study"><b>자습</b><button class="chip all ${allOn ? 'on' : ''}" data-act="chip-all" data-d="${d}" data-p="${p}" data-g="${g}" title="전체 자습">전</button>${chips('study', cell.study)}</span></div>
+      <div class="sc-row"><span class="chips excl"><b>제외</b>${chips('exclude', cell.exclude)}</span><span class="sc-sum ${sum.cls}" data-sum="${d},${p},${g}">${esc(sum.text)}</span></div>
     </div>`;
   }
 
@@ -430,14 +414,16 @@
       ${panelHead('일차별 시험 과목', 's2', `<span class="legend"><span><i style="background:#ffe58a"></i>자습반</span><span><i style="background:#ffc9c9"></i>감독 제외반</span><span><i style="background:#f1edff;border-color:#c9bdf3"></i>추가반</span></span>`,
         '<button class="btn sm" data-act="subj-clear">모두 지우기</button><button class="btn sm primary" data-act="subj-paste">엑셀에서 붙여넣기</button>')}
       <div class="panel-body">
+      <div class="days-grid">
       ${state.days.map((day, d) => `
-        <div class="day-card">
-          <div class="day-head"><h3>${d + 1}일차</h3><span class="muted">${esc(day.date) || '날짜 미입력'} · ${day.periods}교시</span></div>
+        <div class="day-card day-c${d % 4}">
+          <div class="day-head"><span class="day-pill day-c${d % 4}">${d + 1}일차</span><b>${esc(day.date) || '<span class="muted" style="font-weight:400">날짜 미입력</span>'}</b><span class="muted">${day.periods}교시</span></div>
           <table class="subj-table">
-            <thead><tr><th>교시</th><th>1학년 <span class="muted">(${state.classes[0]}반)</span></th><th>2학년 <span class="muted">(${state.classes[1]}반)</span></th><th>3학년 <span class="muted">(${state.classes[2]}반)</span></th></tr></thead>
-            <tbody>${range(1, day.periods).map((p) => `<tr><td>${p}교시</td>${[1, 2, 3].map((g) => `<td id="sc-${d}-${p}-${g}">${subjectCellHTML(d, p, g)}</td>`).join('')}</tr>`).join('')}</tbody>
+            <thead><tr><th>교시</th><th>1학년 <span class="muted">${state.classes[0]}반</span></th><th>2학년 <span class="muted">${state.classes[1]}반</span></th><th>3학년 <span class="muted">${state.classes[2]}반</span></th></tr></thead>
+            <tbody>${range(1, day.periods).map((p) => `<tr><td><span class="p-badge">${p}</span><small>교시</small></td>${[1, 2, 3].map((g) => `<td id="sc-${d}-${p}-${g}">${subjectCellHTML(d, p, g)}</td>`).join('')}</tr>`).join('')}</tbody>
           </table>
         </div>`).join('')}
+      </div>
       </div>
     </div>
     ${stepNav('subjects')}`;
@@ -486,38 +472,84 @@
     const dup = new Set(names.filter((n, i) => n && names.indexOf(n) !== i));
     const prevOff = state.term === TERMS[0];
     const histN = Object.keys(state.roomHistory).length;
+    const nameSet = new Set(names.filter(Boolean));
+    const bad = (n) => n.trim() && !nameSet.has(n.trim());
     $('#tab-teachers').innerHTML = `
-    ${guide(['<b>엑셀 불러오기</b> 또는 <b>붙여넣기</b>로 명단을 한 번에 넣습니다. 머리글(이름·과목·담임·구분·목표시수)이 있으면 열 순서는 상관없습니다.', '담임은 <code>2-5</code>, 부장은 <code>3-부장</code>처럼 적고, 구분(일반·고사담당·원로·순회·제외)을 확인합니다.', prevOff ? '1차 고사는 이전 누적을 쓰지 않습니다.' : '<b>이전 회차 결과 엑셀</b>을 불러와 누적 시수를 채웁니다.'], 's3')}
-    <div class="panel">
-      ${panelHead('전체 교사 명단', 's3', E.TYPES.map((t) => `<span class="badge">${t} ${count[t] || 0}</span>`).join(' '),
-        `<button class="btn sm" data-act="t-add">+ 한 명 추가</button><button class="btn sm" data-act="t-paste">붙여넣기</button><button class="btn sm primary" data-act="t-excel">엑셀 파일 불러오기</button>`)}
-      <div class="panel-body" style="padding-top:8px">
-        <div class="row" style="margin-bottom:8px">
-          <button class="btn sm" data-act="t-prev-import" ${prevOff ? 'title="1차 고사에서는 누적을 쓰지 않습니다. 불러오면 2차 고사로 바뀝니다."' : ''}>이전 회차 결과 엑셀에서 누적 불러오기</button>
-          <button class="btn sm" data-act="t-prev-clear">누적 비우기</button>
-          <span class="muted small">${prevOff ? '1차 고사: 이전 누적은 쓰지 않습니다.' : `이전 누적 = 지난 회차까지의 전체 시수.`}${histN ? ` 교실 이력 ${histN}명분 보관 중.` : ''}</span>
-          <span class="spacer"></span>
-          <button class="btn sm ghost danger" data-act="t-clear">명단 전체 삭제</button>
+    ${guide(['<b>엑셀 불러오기</b> 또는 <b>붙여넣기</b>로 명단을 한 번에 넣습니다. 담임은 <code>2-5</code>, 부장은 <code>3-부장</code>처럼 적고 구분을 확인합니다.', prevOff ? '1차 고사는 이전 누적을 쓰지 않습니다.' : '<b>이전 회차 결과 엑셀</b>을 불러와 누적 시수를 채웁니다.', '오른쪽에 <b>특수실</b> 담당과 교시별 <b>예외</b>(출장·연가)를 적습니다. 없으면 비워 둡니다.'], 's3')}
+    <div class="teachers-layout">
+      <div class="panel">
+        ${panelHead('전체 교사 명단', 's3', E.TYPES.map((t) => `<span class="badge">${t} ${count[t] || 0}</span>`).join(' '),
+          `<button class="btn sm" data-act="t-add">+ 한 명</button><button class="btn sm" data-act="t-paste">붙여넣기</button><button class="btn sm primary" data-act="t-excel">엑셀 불러오기</button>`)}
+        <div class="panel-body" style="padding-top:8px">
+          <div class="row tight" style="margin-bottom:8px">
+            <button class="btn sm" data-act="t-prev-import" ${prevOff ? 'title="1차 고사에서는 누적을 쓰지 않습니다. 불러오면 2차 고사로 바뀝니다."' : ''}>이전 결과 엑셀에서 누적 불러오기</button>
+            <button class="btn sm ghost" data-act="t-prev-clear">누적 비우기</button>
+            <span class="muted small">${prevOff ? '1차 고사: 이전 누적은 쓰지 않습니다.' : '이전 누적 = 지난 회차까지의 전체 시수.'}${histN ? ` 교실 이력 ${histN}명분 보관 중.` : ''}</span>
+            <span class="spacer"></span>
+            <button class="btn sm ghost danger" data-act="t-clear">전체 삭제</button>
+          </div>
+          <div class="tbl-wrap">
+          <table class="grid dense">
+            <thead><tr><th style="width:36px">연번</th><th style="width:96px">이름</th><th>과목 <span class="muted" style="font-weight:400" title="여러 과목은 / 로 구분">(/ 구분)</span></th><th style="width:78px">담임</th><th style="width:98px">구분</th><th style="width:66px">목표</th><th style="width:66px">누적</th><th style="width:30px"></th></tr></thead>
+            <tbody>${ts.map((t, i) => `<tr>
+              <td class="idx">${i + 1}</td>
+              <td><input data-bind="teachers.${i}.name" data-tcell="${i},0" value="${esc(t.name)}" class="${dup.has(t.name.trim()) ? 'bad' : ''}" title="${dup.has(t.name.trim()) ? '이름이 중복됩니다' : ''}" placeholder="이름"></td>
+              <td><input class="left" data-bind="teachers.${i}.subject" data-tcell="${i},1" value="${esc(t.subject)}" placeholder="예: 수학 / 정보"></td>
+              <td><input data-bind="teachers.${i}.homeroom" data-tcell="${i},2" value="${esc(t.homeroom)}" placeholder="2-5"></td>
+              <td><select data-bind="teachers.${i}.type" data-tcell="${i},3">${E.TYPES.map((x) => `<option ${x === t.type ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
+              <td><input data-bind="teachers.${i}.target" data-tcell="${i},4" value="${esc(t.target)}" inputmode="numeric" placeholder="${t.type === '원로' ? '필수' : '-'}"></td>
+              <td><input data-bind="teachers.${i}.prev" data-tcell="${i},5" value="${esc(t.prev)}" inputmode="numeric" ${prevOff ? 'style="opacity:.45"' : ''} placeholder="0"></td>
+              <td><button class="icon-btn" data-act="t-del" data-i="${i}" title="삭제">✕</button></td>
+            </tr>`).join('') || '<tr><td colspan="8" class="muted" style="padding:28px">교사 명단이 비어 있습니다. 오른쪽 위 <b>엑셀 불러오기</b> 또는 <b>붙여넣기</b>로 한 번에 넣을 수 있습니다.</td></tr>'}</tbody>
+          </table></div>
+          <p class="muted small" style="margin-top:8px">구분 — <b>일반</b>: 시수를 고르게 · <b>고사담당</b>: 1교시에만 · <b>원로</b>: 교실 감독만, 목표시수까지 · <b>순회</b>: 복도·자습 감독만 · <b>제외</b>: 배정 안 함. 목표는 원로에게는 채울 시수, 그 밖에는 넘기지 않을 상한(비우면 제한 없음).</p>
         </div>
-        <div style="overflow:auto; max-height: calc(100vh - 330px); border:1px solid var(--line); border-radius:6px">
-        <table class="grid">
-          <thead><tr><th style="width:40px">연번</th><th style="width:120px">이름</th><th>과목 <span class="muted" title="여러 과목은 / 로 구분">(/ 구분)</span></th><th style="width:96px">담임</th><th style="width:112px">구분</th><th style="width:80px">목표시수</th><th style="width:84px">이전 누적</th><th style="width:36px"></th></tr></thead>
-          <tbody>${ts.map((t, i) => `<tr>
-            <td class="idx">${i + 1}</td>
-            <td><input data-bind="teachers.${i}.name" data-tcell="${i},0" value="${esc(t.name)}" class="${dup.has(t.name.trim()) ? 'bad' : ''}" title="${dup.has(t.name.trim()) ? '이름이 중복됩니다' : ''}" placeholder="이름"></td>
-            <td><input class="left" data-bind="teachers.${i}.subject" data-tcell="${i},1" value="${esc(t.subject)}" placeholder="예: 수학 / 정보"></td>
-            <td><input data-bind="teachers.${i}.homeroom" data-tcell="${i},2" value="${esc(t.homeroom)}" placeholder="2-5"></td>
-            <td><select data-bind="teachers.${i}.type" data-tcell="${i},3">${E.TYPES.map((x) => `<option ${x === t.type ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
-            <td><input data-bind="teachers.${i}.target" data-tcell="${i},4" value="${esc(t.target)}" inputmode="numeric" placeholder="${t.type === '원로' ? '필수' : '-'}"></td>
-            <td><input data-bind="teachers.${i}.prev" data-tcell="${i},5" value="${esc(t.prev)}" inputmode="numeric" ${prevOff ? 'style="opacity:.45"' : ''} placeholder="0"></td>
-            <td><button class="icon-btn" data-act="t-del" data-i="${i}" title="삭제">✕</button></td>
-          </tr>`).join('') || '<tr><td colspan="8" class="muted" style="padding:28px">교사 명단이 비어 있습니다. 오른쪽 위 <b>엑셀 파일 불러오기</b> 또는 <b>붙여넣기</b>로 한 번에 넣을 수 있습니다.</td></tr>'}</tbody>
-        </table></div>
-        <p class="muted small" style="margin-top:8px">구분 — <b>일반</b>: 시수를 고르게 · <b>고사담당</b>: 1교시에만 · <b>원로</b>: 교실 감독만, 목표시수까지 · <b>순회</b>: 복도·자습 감독만 · <b>제외</b>: 배정 안 함. 목표시수는 원로에게는 채울 시수, 그 밖에는 넘기지 않을 상한(비우면 제한 없음)입니다.</p>
+      </div>
+
+      <div class="side-col">
+        <div class="panel">
+          ${panelHead('특수실', 's4-special', '', '<button class="btn sm" data-act="sp-add">+ 추가</button>')}
+          <div class="panel-body flush">
+          <table class="grid dense">
+            <thead><tr><th>명칭</th><th>지정자</th><th style="width:64px">시수</th><th style="width:30px"></th></tr></thead>
+            <tbody>${state.specials.map((r, i) => `<tr>
+              <td><input data-bind="specials.${i}.room" value="${esc(r.room)}" placeholder="예: 특수학급"></td>
+              <td><input data-bind="specials.${i}.teacher" data-namecheck value="${esc(r.teacher)}" list="teacherNames" class="${bad(r.teacher) ? 'bad' : ''}" placeholder="명단에서 선택"></td>
+              <td><input data-bind="specials.${i}.hours" value="${esc(r.hours)}" inputmode="numeric" placeholder="0"></td>
+              <td><button class="icon-btn" data-act="sp-del" data-i="${i}">✕</button></td>
+            </tr>`).join('') || '<tr><td colspan="4" class="muted" style="padding:14px">특수실 없음</td></tr>'}</tbody>
+          </table>
+          </div>
+          <div class="panel-foot muted small">지정자는 일반 감독에서 빠지고, 적은 시수가 그 선생님 시수에 더해집니다.</div>
+        </div>
+
+        <div class="panel">
+          ${panelHead('일차·교시별 예외 감독자', 's4-exceptions')}
+          <div class="panel-body" style="padding:8px">
+          ${state.days.map((day, d) => `
+            <div class="day-card day-c${d % 4}">
+              <div class="day-head"><span class="day-pill day-c${d % 4}">${d + 1}일차</span><b>${esc(day.date) || ''}</b><span class="spacer"></span><button class="btn sm" data-act="ex-add" data-d="${d}">+ 추가</button></div>
+              <table class="grid dense">
+                ${day.exceptions.length ? `<thead><tr><th style="width:96px">교시</th><th>이름</th><th>사유</th><th style="width:30px"></th></tr></thead>` : ''}
+                <tbody>${day.exceptions.map((x, i) => {
+                  const pv = E.parsePeriodValue(x.period);
+                  const opts = ['<option value="">선택</option>'].concat(range(1, day.periods).map((p) => `<option value="${p}" ${pv === p ? 'selected' : ''}>${p}교시</option>`), [`<option value="전체" ${pv === 'all' ? 'selected' : ''}>종일</option>`]);
+                  return `<tr>
+                  <td><select data-bind="days.${d}.exceptions.${i}.period">${opts.join('')}</select></td>
+                  <td><input data-bind="days.${d}.exceptions.${i}.name" data-namecheck value="${esc(x.name)}" list="teacherNames" class="${bad(x.name) ? 'bad' : ''}" placeholder="명단에서 선택"></td>
+                  <td><input class="left" data-bind="days.${d}.exceptions.${i}.reason" value="${esc(x.reason)}" placeholder="출장, 연가 등"></td>
+                  <td><button class="icon-btn" data-act="ex-del" data-d="${d}" data-i="${i}">✕</button></td></tr>`;
+                }).join('') || '<tr><td class="muted" style="padding:8px 12px; text-align:left; height:auto">예외 없음</td></tr>'}</tbody>
+              </table>
+            </div>`).join('')}
+          </div>
+          <div class="panel-foot muted small">명단에 없는 이름은 빨갛게 표시되고 적용되지 않습니다. 종일 자리를 비우면 교시를 "종일"로 고릅니다.</div>
+        </div>
       </div>
     </div>
     ${stepNav('teachers')}`;
   };
+  renderers.extras = () => renderers.teachers();
 
   function applyTeacherGrid(rows, startRow, startCol) {
     rows.forEach((cols, i) => {
@@ -530,55 +562,6 @@
       });
     });
   }
-
-  // ---------------------------------------------------------------
-  // 4. 특수실·예외
-  // ---------------------------------------------------------------
-  renderers.extras = function () {
-    const names = new Set(state.teachers.map((t) => t.name.trim()).filter(Boolean));
-    const bad = (n) => n.trim() && !names.has(n.trim());
-    $('#tab-extras').innerHTML = `
-    ${guide(['특수학급 등 시험 기간 내내 따로 자리를 지키는 선생님을 <b>특수실</b>에 적습니다.', '출장·연가·수업으로 특정 교시에 감독할 수 없는 선생님을 일차별 <b>예외</b>에 적습니다. 종일이면 교시를 "종일"로 고릅니다.', '해당 사항이 없으면 그대로 다음 단계로 넘어가도 됩니다.'], 's4')}
-    <div class="grid-2">
-      <div class="panel">
-        ${panelHead('특수실', 's4-special', '지정자는 일반 감독에서 빠지고, 적은 시수가 그 선생님 시수에 더해집니다.', '<button class="btn sm" data-act="sp-add">+ 추가</button>')}
-        <div class="panel-body flush">
-        <table class="grid">
-          <thead><tr><th>명칭</th><th>지정자</th><th style="width:80px">시수</th><th style="width:36px"></th></tr></thead>
-          <tbody>${state.specials.map((r, i) => `<tr>
-            <td><input data-bind="specials.${i}.room" value="${esc(r.room)}" placeholder="예: 특수학급"></td>
-            <td><input data-bind="specials.${i}.teacher" data-namecheck value="${esc(r.teacher)}" list="teacherNames" class="${bad(r.teacher) ? 'bad' : ''}" placeholder="명단에서 선택"></td>
-            <td><input data-bind="specials.${i}.hours" value="${esc(r.hours)}" inputmode="numeric" placeholder="0"></td>
-            <td><button class="icon-btn" data-act="sp-del" data-i="${i}">✕</button></td>
-          </tr>`).join('') || '<tr><td colspan="4" class="muted" style="padding:16px">특수실 없음</td></tr>'}</tbody>
-        </table>
-        </div>
-      </div>
-
-      <div class="panel">
-        ${panelHead('일차·교시별 예외 감독자', 's4-exceptions', '명단에 없는 이름은 빨갛게 표시되고 적용되지 않습니다.')}
-        <div class="panel-body">
-        ${state.days.map((day, d) => `
-          <div class="day-card">
-            <div class="day-head"><h3>${d + 1}일차</h3><span class="muted">${esc(day.date) || ''}</span><span class="spacer"></span><button class="btn sm" data-act="ex-add" data-d="${d}">+ 추가</button></div>
-            <table class="grid">
-              ${day.exceptions.length ? `<thead><tr><th style="width:120px">교시</th><th>이름</th><th>사유</th><th style="width:36px"></th></tr></thead>` : ''}
-              <tbody>${day.exceptions.map((x, i) => {
-                const pv = E.parsePeriodValue(x.period);
-                const opts = ['<option value="">교시 선택</option>'].concat(range(1, day.periods).map((p) => `<option value="${p}" ${pv === p ? 'selected' : ''}>${p}교시</option>`), [`<option value="전체" ${pv === 'all' ? 'selected' : ''}>종일</option>`]);
-                return `<tr>
-                <td><select data-bind="days.${d}.exceptions.${i}.period">${opts.join('')}</select></td>
-                <td><input data-bind="days.${d}.exceptions.${i}.name" data-namecheck value="${esc(x.name)}" list="teacherNames" class="${bad(x.name) ? 'bad' : ''}" placeholder="명단에서 선택"></td>
-                <td><input class="left" data-bind="days.${d}.exceptions.${i}.reason" value="${esc(x.reason)}" placeholder="출장, 연가 등"></td>
-                <td><button class="icon-btn" data-act="ex-del" data-d="${d}" data-i="${i}">✕</button></td></tr>`;
-              }).join('') || '<tr><td class="muted" style="padding:10px 12px; text-align:left; height:auto">예외 없음</td></tr>'}</tbody>
-            </table>
-          </div>`).join('')}
-        </div>
-      </div>
-    </div>
-    ${stepNav('extras')}`;
-  };
 
   // ---------------------------------------------------------------
   // 5. 배정 결과
@@ -680,7 +663,7 @@
   function gridTable(model, ev) {
     const C = model.maxClasses, K = model.corridors;
     const hasSp = model.slots.some((s) => s.kind === 'special');
-    let h = `<table class="res"><thead><tr><th>일차</th><th>교시</th><th>학년</th><th>과목</th>${range(1, C).map((c) => `<th>${c}반</th>`).join('')}${hasSp ? '<th>추가반</th>' : ''}${range(1, K).map((k) => `<th>복도${k}</th>`).join('')}<th>예비 (누적 적은 순)</th></tr></thead><tbody>`;
+    let h = `<table class="res fill"><thead><tr><th>일차</th><th>교시</th><th>학년</th><th>과목</th>${range(1, C).map((c) => `<th>${c}반</th>`).join('')}${hasSp ? '<th>추가반</th>' : ''}${range(1, K).map((k) => `<th>복도${k}</th>`).join('')}<th>예비 (누적 적은 순)</th></tr></thead><tbody>`;
     let last = -1;
     model.periods.forEach((per) => {
       if (last !== -1 && last !== per.d) h += `<tr class="day-sep"><td colspan="${6 + C + K + (hasSp ? 1 : 0)}"></td></tr>`;
@@ -709,7 +692,7 @@
     const P = model.periods;
     const byDay = [];
     P.forEach((per) => { if (!byDay[per.d]) byDay[per.d] = []; byDay[per.d].push(per); });
-    let h = '<table class="res"><thead>';
+    let h = '<table class="res fill"><thead>';
     h += `<tr><th class="sticky-1" rowspan="5" style="min-width:40px">연번</th><th class="sticky-2" rowspan="5" style="min-width:70px">이름</th><th class="sticky-3" rowspan="5">과목</th>${byDay.map((ps) => `<th colspan="${ps.length}">${ps[0].dayLabel} ${esc(ps[0].date)}</th>`).join('')}${['교실', '복도', '자습', '특수', '이번', '누적'].map((x) => `<th rowspan="5">${x}</th>`).join('')}</tr>`;
     h += `<tr>${P.map((per) => `<th>${per.p}교시</th>`).join('')}</tr>`;
     [0, 1, 2].forEach((g) => { h += `<tr>${P.map((per) => `<th class="subj ${per.grades[g].parsed.allStudy || per.grades[g].parsed.study.length ? 'study' : ''}">${per.grades[g].label ? `${g + 1}학년 ${esc(per.grades[g].label)}` : ''}</th>`).join('')}</tr>`; });
@@ -745,7 +728,7 @@
   function statsTable(model, ev) {
     const bal = ev.stats.filter((s) => s.group === 'balance').map((s) => s.prev + s.total);
     const mx = Math.max(...bal), mn = Math.min(...bal);
-    let h = '<table class="res"><thead><tr><th>연번</th><th>이름</th><th>구분</th><th>과목</th><th>교실</th><th>복도</th><th>자습</th><th>특수실</th><th>이번 합계</th><th>이전 누적</th><th>전체 누적</th><th>목표시수</th><th title="이 시험에서 감독할 수 있는 교시 수 (본인 시험·예외·구분 규칙을 뺀 것)">가능 교시</th></tr></thead><tbody>';
+    let h = '<table class="res fill"><thead><tr><th>연번</th><th>이름</th><th>구분</th><th>과목</th><th>교실</th><th>복도</th><th>자습</th><th>특수실</th><th>이번 합계</th><th>이전 누적</th><th>전체 누적</th><th>목표시수</th><th title="이 시험에서 감독할 수 있는 교시 수 (본인 시험·예외·구분 규칙을 뺀 것)">가능 교시</th></tr></thead><tbody>';
     ev.stats.forEach((st, i) => {
       const tot = st.prev + st.total;
       const hl = st.group === 'balance' && mx !== mn ? (tot === mx ? 'hi' : tot === mn ? 'lo' : '') : '';
@@ -1003,13 +986,12 @@
   async function showIntro() {
     const v = await dialog({
       title: '시작하기', wide: true,
-      html: `<p>위쪽 <b>1 → 5 단계</b>를 차례로 진행하면 됩니다. 각 단계 아래의 <b>다음 단계</b> 버튼으로 이동하고, 궁금한 부분은 <b>?</b> 표시나 상단 <b>설명서</b>를 누르세요.</p>
+      html: `<p>위쪽 <b>1 → 4 단계</b>를 차례로 진행하면 됩니다. 각 단계 아래의 <b>다음 단계</b> 버튼으로 이동하고, 궁금한 부분은 <b>?</b> 표시나 상단 <b>설명서</b>를 누르세요.</p>
       <div class="intro-steps">
         <div class="intro-step"><b><span class="n">1</span>기본 설정</b><small>회차, 반 수, 시험 일차·교시</small></div>
         <div class="intro-step"><b><span class="n">2</span>시험 과목</b><small>교시별 과목, 자습·제외 반, 추가반</small></div>
-        <div class="intro-step"><b><span class="n">3</span>교사 명단</b><small>엑셀 불러오기, 담임·구분, 이전 누적</small></div>
-        <div class="intro-step"><b><span class="n">4</span>특수실 · 예외</b><small>특수실 담당, 교시별 예외 감독자</small></div>
-        <div class="intro-step"><b><span class="n">5</span>배정 결과</b><small>배정 → 직접 수정 → 엑셀 저장 → 누적 반영</small></div>
+        <div class="intro-step"><b><span class="n">3</span>교사 명단 · 예외</b><small>엑셀 불러오기, 담임·구분, 이전 누적, 특수실, 교시별 예외</small></div>
+        <div class="intro-step"><b><span class="n">4</span>배정 결과</b><small>배정 → 직접 수정 → 엑셀 저장 → 누적 반영</small></div>
       </div>
       <p class="muted small" style="margin-top:10px">입력하는 즉시 이 브라우저에 저장됩니다. 다른 컴퓨터에서도 쓰려면 <b>백업 저장</b>으로 파일을 받아 두세요. 예전 프로그램의 백업 파일이 있다면 <b>백업 불러오기</b>로 그대로 이어서 쓸 수 있습니다.</p>`,
       buttons: [{ label: '설명서 보기', value: 'help' }, { label: '예전 백업 불러오기', value: 'load' }, { label: '시작하기', value: 'go', cls: 'primary' }],
@@ -1034,11 +1016,11 @@
       <a href="#s1-days" class="sub">반 수·일차·교시</a>
       <a href="#s2">2. 시험 과목</a>
       <a href="#s2-paste" class="sub">엑셀에서 붙여넣기</a>
-      <a href="#s3">3. 교사 명단</a>
+      <a href="#s3">3. 교사 명단 · 예외</a>
       <a href="#s3-type" class="sub">구분과 목표시수</a>
       <a href="#s3-excel" class="sub">엑셀 양식</a>
-      <a href="#s4">4. 특수실 · 예외</a>
-      <a href="#s5">5. 배정 결과</a>
+      <a href="#s4" class="sub">특수실 · 예외 감독자</a>
+      <a href="#s5">4. 배정 결과</a>
       <a href="#s5-edit" class="sub">결과 직접 수정</a>
       <a href="#s5-excel" class="sub">엑셀 파일 구성</a>
       <a href="#rules">배정 규칙과 원리</a>
@@ -1050,11 +1032,10 @@
       <ol>
         <li><b>1. 기본 설정</b> — 회차, 반 수, 시험 일차와 교시 수</li>
         <li><b>2. 시험 과목</b> — 교시별 학년 과목, 자습·제외 반, 추가반</li>
-        <li><b>3. 교사 명단</b> — 이름·과목·담임·구분·목표시수·이전 누적</li>
-        <li><b>4. 특수실 · 예외</b> — 특수실 담당자, 교시별로 감독이 어려운 선생님</li>
-        <li><b>5. 배정 결과</b> — 배정 실행, 결과 수정, 엑셀 저장, 다음 회차 준비</li>
+        <li><b>3. 교사 명단 · 예외</b> — 이름·과목·담임·구분·목표시수·이전 누적, 특수실 담당자, 교시별로 감독이 어려운 선생님</li>
+        <li><b>4. 배정 결과</b> — 배정 실행, 결과 수정, 엑셀 저장, 다음 회차 준비</li>
       </ol>
-      <p>화면 위쪽의 단계 표시에는 각 단계의 입력 상태가 함께 보입니다. 단계는 순서대로 하지 않아도 되지만, 2단계와 4단계의 칸 수는 1단계의 일차·교시 수에 따라 자동으로 바뀝니다.</p>
+      <p>화면 위쪽의 단계 표시에는 각 단계의 입력 상태가 함께 보입니다. 단계는 순서대로 하지 않아도 되지만, 2단계 과목 칸과 3단계 예외 칸의 수는 1단계의 일차·교시 수에 따라 자동으로 바뀝니다.</p>
 
       <h3 id="s0-backup">자료 보관과 백업</h3>
       <ul>
@@ -1110,11 +1091,11 @@
         <li>붙여넣기는 과목명만 바꾸고, 이미 눌러 둔 자습·제외·추가반은 그대로 둡니다. 과목명에 <code>*(장소)</code>가 들어 있으면 추가반으로 자동 변환됩니다.</li>
       </ul>
 
-      <h2 id="s3">3. 교사 명단</h2>
+      <h2 id="s3">3. 교사 명단 · 예외</h2>
       <table>
         <tr><th>열</th><th>설명</th></tr>
         <tr><td>이름</td><td>교사 이름. 같은 이름이 둘이면 빨갛게 표시됩니다. 동명이인은 <code>홍길동A</code>처럼 구분해 주세요.</td></tr>
-        <tr><td>과목</td><td>담당 과목. 여러 과목은 <code>/</code>로 구분합니다(예: <code>화학/윤리</code>). <b>본인 과목 시험 시간에는 감독에서 빠집니다.</b> <code>수학</code> 교사는 <code>수학Ⅰ</code>·<code>수학Ⅱ</code>·<code>수학(미적)</code> 시험과 같은 과목으로 봅니다. 시험 과목명과 표기가 달라 짝을 찾지 못하면 5단계 점검 목록에 표시됩니다.</td></tr>
+        <tr><td>과목</td><td>담당 과목. 여러 과목은 <code>/</code>로 구분합니다(예: <code>화학/윤리</code>). <b>본인 과목 시험 시간에는 감독에서 빠집니다.</b> <code>수학</code> 교사는 <code>수학Ⅰ</code>·<code>수학Ⅱ</code>·<code>수학(미적)</code> 시험과 같은 과목으로 봅니다. 시험 과목명과 표기가 달라 짝을 찾지 못하면 4단계 점검 목록에 표시됩니다.</td></tr>
         <tr><td>담임</td><td><code>2-5</code>처럼 학년-반. 부장은 <code>3-부장</code>. 담임은 본인 반 교실에 들어가지 않습니다. 담임이 아니면 비웁니다.</td></tr>
         <tr><td>구분</td><td>아래 표 참고.</td></tr>
         <tr><td>목표시수</td><td>원로: 이번 시험에서 채울 시수(필수). 그 밖의 구분: 적어 두면 이 시수를 넘기지 않도록 합니다(비우면 제한 없음).</td></tr>
@@ -1137,17 +1118,17 @@
         <li>이미 명단이 있을 때 불러오면 <b>뒤에 추가</b>할지 <b>새 명단으로 바꿀지</b> 묻습니다.</li>
       </ul>
 
-      <h2 id="s4">4. 특수실 · 예외</h2>
-      <h3 id="s4-special">특수실</h3>
+      <h3 id="s4">특수실 · 예외 감독자 <span class="muted" style="font-weight:400">(3단계 오른쪽)</span></h3>
+      <h4 id="s4-special">특수실</h4>
       <p>특수학급처럼 시험 기간 내내 한 선생님이 따로 자리를 지키는 곳입니다. 지정자는 일반 감독에서 빠지고 결과에 "특수(명칭)"으로 표시되며, 적어 둔 시수가 그 선생님의 이번 회차 시수에 더해져 시수표와 누적에 반영됩니다.</p>
-      <h3 id="s4-exceptions">일차·교시별 예외 감독자</h3>
+      <h4 id="s4-exceptions">일차·교시별 예외 감독자</h4>
       <ul>
         <li>출장·연가·수업 등으로 특정 교시에 감독할 수 없는 선생님을 일차별로 적습니다. 교시를 고르고 이름을 명단에서 선택합니다. 종일 자리를 비우면 교시를 <b>종일</b>로 고릅니다.</li>
         <li>명단에 없는 이름은 빨갛게 표시되고 적용되지 않습니다. 이름 뒤 공백이나 오타가 흔한 원인입니다.</li>
         <li>예외로 적힌 교시에는 감독뿐 아니라 예비 명단에서도 빠집니다. 사유는 결과_감독표의 비고 칸에 함께 적힙니다.</li>
       </ul>
 
-      <h2 id="s5">5. 배정 결과</h2>
+      <h2 id="s5">4. 배정 결과</h2>
       <ol>
         <li><b>배정 전 점검</b>을 봅니다. 빨간 항목(명단 없음, 이름 중복 등)은 해결해야 배정할 수 있습니다. 노란 항목은 배정은 되지만 결과에 영향을 줄 수 있는 것(과목명 불일치, 교사 부족 가능성 등)이고, 참고 항목은 비어 있는 과목 칸 같은 안내입니다.</li>
         <li><b>배정 시작</b>을 누르면 1~3초 뒤 결과가 나옵니다. 위쪽 요약에서 <b>감독 부족 자리</b>와 <b>규칙 위반 칸</b>이 0인지 먼저 확인하세요.</li>
@@ -1405,10 +1386,10 @@
       case 't-prev-clear':
         if (!(await confirmBox('누적 비우기', '모든 선생님의 이전 누적 시수와 보관 중인 교실 이력을 지울까요?', '지우기', 'orange'))) return;
         state.teachers.forEach((t) => { t.prev = ''; }); state.roomHistory = {}; save(); renderers.teachers(); return;
-      case 'sp-add': state.specials.push({ room: '', teacher: '', hours: '' }); save(); renderers.extras(); { const inp = $$('[data-bind^="specials."][data-bind$=".room"]').pop(); if (inp) inp.focus(); } return;
-      case 'sp-del': state.specials.splice(i, 1); save(); renderers.extras(); updateBadges(); return;
-      case 'ex-add': { const d = +el.dataset.d; state.days[d].exceptions.push({ period: '', name: '', reason: '' }); save(); renderers.extras(); const rows = $$(`[data-bind^="days.${d}.exceptions."][data-bind$=".period"]`); if (rows.length) rows[rows.length - 1].focus(); return; }
-      case 'ex-del': state.days[+el.dataset.d].exceptions.splice(i, 1); save(); renderers.extras(); updateBadges(); return;
+      case 'sp-add': state.specials.push({ room: '', teacher: '', hours: '' }); save(); renderers.teachers(); { const inp = $$('[data-bind^="specials."][data-bind$=".room"]').pop(); if (inp) inp.focus(); } return;
+      case 'sp-del': state.specials.splice(i, 1); save(); renderers.teachers(); updateBadges(); return;
+      case 'ex-add': { const d = +el.dataset.d; state.days[d].exceptions.push({ period: '', name: '', reason: '' }); save(); renderers.teachers(); const rows = $$(`[data-bind^="days.${d}.exceptions."][data-bind$=".period"]`); if (rows.length) rows[rows.length - 1].focus(); return; }
+      case 'ex-del': state.days[+el.dataset.d].exceptions.splice(i, 1); save(); renderers.teachers(); updateBadges(); return;
       case 'run': return runAssign(false);
       case 'rerun': return runAssign(true);
       case 'export': return exportExcel();
@@ -1430,6 +1411,7 @@
 
   // 시작
   renderStepper();
+  if (ui.tab === 'extras') ui.tab = 'teachers';
   if (!STEPS.some((s) => s.key === ui.tab)) ui.tab = 'setup';
   renderAll();
   showTab(ui.tab);

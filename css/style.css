@@ -236,40 +236,64 @@ details.issue-group > summary { cursor: pointer; font-weight: 600; padding: 4px 
 details.issue-group > summary::before { content: "▸"; color: var(--ink-3); font-size: 11px; }
 details.issue-group[open] > summary::before { content: "▾"; }
 
+/* ---------------- 일차 색상 (1~4일차 순환) ---------------- */
+.day-c0 { --day: #3b4fd8; --day-soft: #eef0fc; --day-line: #c9d0f5; }
+.day-c1 { --day: #15803d; --day-soft: #ecf8ef; --day-line: #bfe3c9; }
+.day-c2 { --day: #b45309; --day-soft: #fff6e8; --day-line: #f3d8ad; }
+.day-c3 { --day: #7e22ce; --day-soft: #f6eefc; --day-line: #dcc5f0; }
+.day-pill { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 10px; font-size: 11.5px; font-weight: 700; background: var(--day-soft, var(--surface-2)); color: var(--day, var(--ink-2)); border: 1px solid var(--day-line, var(--line)); white-space: nowrap; }
+
 /* ---------------- 2. 시험 과목 ---------------- */
-.day-card { border: 1px solid var(--line); border-radius: var(--r-md); margin-bottom: 10px; overflow: hidden; background: var(--surface); }
-.day-head { display: flex; align-items: center; gap: 10px; padding: 7px 12px; background: var(--surface-2); border-bottom: 1px solid var(--line); }
-.day-head h3 { font-size: 13px; font-weight: 700; }
+.days-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(720px, 1fr)); gap: 12px; align-items: start; }
+.day-card { border: 1px solid var(--day-line, var(--line)); border-radius: var(--r-md); overflow: hidden; background: var(--surface); margin-bottom: 10px; }
+.days-grid .day-card { margin-bottom: 0; }
+.day-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--day-soft, var(--surface-2)); border-bottom: 1px solid var(--day-line, var(--line)); }
+.day-head b { font-size: 13px; }
 .day-head .muted { font-size: 12px; }
 .subj-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.subj-table th, .subj-table td { border-top: 1px solid var(--line); border-left: 1px solid var(--line); padding: 6px 8px; vertical-align: top; }
-.subj-table thead th { border-top: none; background: #fff; font-size: 12px; font-weight: 600; color: var(--ink-2); padding: 6px 8px; }
-.subj-table th:first-child, .subj-table td:first-child { width: 54px; border-left: none; text-align: center; vertical-align: middle; font-weight: 700; color: var(--ink-2); font-size: 12px; }
-.sc { display: flex; flex-direction: column; gap: 5px; }
-.sc-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.sc-name { flex: 1 1 140px; height: 30px; font-weight: 600; text-align: center; }
-.sc-name::placeholder { font-weight: 400; color: var(--ink-3); }
-.sc-sp { height: 30px; padding: 0 9px; border: 1px dashed var(--line-strong); border-radius: var(--r-sm); background: #fff; color: var(--ink-3); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.subj-table th, .subj-table td { border-top: 1px solid var(--line); border-left: 1px solid var(--line); padding: 5px 6px; vertical-align: top; }
+.subj-table thead th { border-top: none; background: #fff; font-size: 12px; font-weight: 600; color: var(--ink-2); padding: 5px 6px; }
+.subj-table th:first-child, .subj-table td:first-child { width: 44px; border-left: none; text-align: center; vertical-align: middle; padding: 4px 2px; }
+.subj-table td:first-child small { display: block; font-size: 10px; color: var(--ink-3); margin-top: 2px; }
+.subj-table tbody tr:nth-child(even) td { background: #fbfbfd; }
+.p-badge { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--day-soft, var(--surface-2)); color: var(--day, var(--ink-2)); border: 1px solid var(--day-line, var(--line)); font-weight: 700; font-size: 12px; }
+.sc { display: flex; flex-direction: column; gap: 4px; }
+.sc-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; min-height: 22px; }
+.sc-name { flex: 1 1 100px; height: 28px; font-weight: 600; text-align: center; padding: 0 6px; }
+.sc-name::placeholder { font-weight: 400; color: var(--ink-3); font-size: 12px; }
+.sc-sp { height: 28px; padding: 0 7px; border: 1px dashed var(--line-strong); border-radius: var(--r-sm); background: #fff; color: var(--ink-3); font-size: 11.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .sc-sp:hover { border-color: var(--special); color: var(--special); }
 .sc-sp.on { border-style: solid; border-color: var(--special); background: #f1edff; color: var(--special); }
-.sc-room { height: 30px; width: 120px; font-size: 12px; }
-.chips { display: inline-flex; align-items: center; gap: 2px; }
-.chips > b { font-size: 11px; width: 24px; flex: none; }
+.sc-room { height: 26px; width: 100%; font-size: 12px; border-color: #c9bdf3; background: #faf8ff; }
+.chips { display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+.chips > b { font-size: 11px; width: 22px; flex: none; }
 .chips.study > b { color: var(--study-ink); }
 .chips.excl > b { color: var(--excl-ink); }
 .chip {
-  min-width: 22px; height: 22px; padding: 0 4px; font-size: 11px; line-height: 20px;
+  min-width: 21px; height: 21px; padding: 0 3px; font-size: 11px; line-height: 19px;
   border: 1px solid var(--line-strong); background: #fff; border-radius: 4px; cursor: pointer; color: var(--ink-2);
 }
 .chip:hover { border-color: #8b94a3; }
 .chip.all { font-size: 10px; color: var(--ink-3); }
 .chips.study .chip.on { background: #ffe58a; border-color: #e5b93c; color: var(--study-ink); font-weight: 700; }
 .chips.excl .chip.on { background: #ffc9c9; border-color: #e76f6f; color: var(--excl-ink); font-weight: 700; text-decoration: line-through; }
-.sc-sum { margin-left: auto; font-size: 11px; color: var(--ink-3); white-space: nowrap; }
+.sc-sum { margin-left: auto; font-size: 10.5px; color: var(--ink-3); white-space: nowrap; }
 .sc-sum.special { color: var(--special); }
 .sc-sum.none { color: var(--ink-3); font-style: italic; }
 .legend { display: inline-flex; gap: 10px; font-size: 12px; color: var(--ink-2); }
 .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; border: 1px solid rgba(0,0,0,.08); }
+
+/* ---------------- 3. 교사 명단 · 예외 ---------------- */
+.teachers-layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; align-items: start; }
+.side-col { display: flex; flex-direction: column; gap: 12px; }
+.side-col .panel { margin-bottom: 0; }
+.side-col .day-card { margin-bottom: 8px; }
+.side-col .day-card:last-child { margin-bottom: 0; }
+.tbl-wrap { overflow: auto; max-height: calc(100vh - 330px); border: 1px solid var(--line); border-radius: 6px; }
+.panel-foot { padding: 8px 14px; border-top: 1px solid var(--line); }
+table.grid.dense th, table.grid.dense td { height: 32px; padding: 2px 4px; }
+table.grid.dense td input, table.grid.dense td select { height: 26px; padding: 0 6px; }
+@media (max-width: 1280px) { .teachers-layout { grid-template-columns: 1fr; } }
 
 /* ---------------- 5. 결과 ---------------- */
 .actionbar { position: sticky; top: 106px; z-index: 20; }
@@ -285,22 +309,23 @@ details.issue-group[open] > summary::before { content: "▾"; }
 .seg button { height: 30px; padding: 0 14px; border: none; background: none; cursor: pointer; font-weight: 600; color: var(--ink-2); }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button.active { background: var(--accent); color: #fff; }
-.scroll { overflow: auto; max-height: calc(100vh - 300px); border: 1px solid var(--line); border-radius: var(--r-sm); background: #fff; }
+.scroll { overflow: auto; max-height: calc(100vh - 250px); min-height: 360px; border: 1px solid var(--line); border-radius: var(--r-sm); background: #fff; }
 .legend-row { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--ink-2); padding: 6px 0 8px; }
 
 table.res { border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+table.res.fill { width: 100%; }
 table.res th, table.res td { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 3px 7px; text-align: center; white-space: nowrap; background: #fff; height: 28px; }
 table.res thead th { position: sticky; top: 0; z-index: 3; background: var(--head); font-weight: 600; }
 table.res thead tr:nth-child(2) th { top: 28px; }
 table.res thead tr:nth-child(3) th { top: 56px; }
 table.res thead tr:nth-child(4) th { top: 84px; }
 table.res thead tr:nth-child(5) th { top: 112px; }
-table.res thead th.subj { font-weight: 400; font-size: 11px; white-space: normal; min-width: 92px; line-height: 1.2; height: 28px; }
+table.res thead th.subj { font-weight: 400; font-size: 10.5px; white-space: normal; min-width: 84px; line-height: 1.2; height: 28px; }
 table.res .sticky-1 { position: sticky; left: 0; z-index: 2; }
 table.res .sticky-2 { position: sticky; left: 40px; z-index: 2; }
 table.res .sticky-3 { position: sticky; left: 110px; z-index: 2; }
 table.res thead .sticky-1, table.res thead .sticky-2, table.res thead .sticky-3 { z-index: 4; }
-table.res td.slot { cursor: pointer; min-width: 64px; }
+table.res td.slot { cursor: pointer; min-width: 60px; }
 table.res td.slot:hover { outline: 2px solid var(--accent); outline-offset: -2px; }
 table.res td.empty { color: var(--bad); font-weight: 700; background: var(--bad-soft); }
 table.res td.study { background: var(--study); }
@@ -378,7 +403,8 @@ table.res td.subjcol.study { background: var(--study); }
   .step-txt small { display: none; }
   .step { flex: 0 0 auto; min-width: 0; padding: 8px 12px; }
   .day-card { overflow-x: auto; }
-  .subj-table { min-width: 840px; }
+  .subj-table { min-width: 720px; }
+  .days-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
   main { padding: 10px 12px; }
