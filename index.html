@@ -37,7 +37,21 @@
   <datalist id="teacherNames"></datalist>
   <input type="file" id="fileInput" hidden>
 
+  <!-- 접속 암호 화면: 암호가 맞아야 아래 앱이 나타남 (js/config.js 의 url 이 비어 있으면 건너뜀) -->
+  <div id="gate" class="gate" hidden>
+    <form class="gate-box" id="gateForm" autocomplete="off">
+      <div class="gate-brand"><span class="brand-mark" aria-hidden="true"></span><b>스마트 시험 감독 배정</b></div>
+      <label class="gate-label" for="gatePw">접속 암호</label>
+      <input type="password" id="gatePw" class="gate-input" placeholder="학교에서 안내받은 접속 암호" autofocus>
+      <p class="gate-msg" id="gateMsg"></p>
+      <button type="submit" class="btn primary gate-btn" id="gateBtn">들어가기</button>
+      <p class="gate-foot"><button type="button" class="linklike" data-act="gate-change">접속 암호 바꾸기 (관리자)</button></p>
+    </form>
+  </div>
+
   <script src="vendor/exceljs.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
   <script src="js/engine.js"></script>
   <script src="js/excel.js"></script>
   <script src="js/app.js"></script>

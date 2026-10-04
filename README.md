@@ -16,6 +16,14 @@
 
 > 엑셀 라이브러리(ExcelJS)는 `vendor/` 폴더에 들어 있습니다. 학교망에서 외부 CDN이 막혀 있어도 동작합니다.
 
+## 접속 암호
+
+주소를 열면 먼저 접속 암호를 묻고, 맞아야 앱이 나타납니다(매번 묻고 기억하지 않음). 암호는 스마트보드가 쓰는 Supabase 서버 안에서만 비교되며 이 저장소나 페이지에는 들어 있지 않습니다(`docs/supabase-access.sql`).
+
+- **암호 바꾸기**: 암호 화면의 **접속 암호 바꾸기 (관리자)**에서 스마트보드 관리자 이름·비밀번호와 새 암호(8자 이상)를 넣습니다. 또는 Supabase 대시보드 → SQL Editor에서 `select proctor_set_password('새 암호');`
+- 처음 설치 후에도 같은 방법으로 첫 암호를 정합니다. 정하기 전에는 아무도 들어올 수 없습니다.
+- 로컬에서 암호 없이 열어 보려면 `js/config.js`의 `url`을 비웁니다.
+
 ## 사용 순서
 
 | 단계 | 하는 일 |
@@ -32,7 +40,10 @@ index.html        화면
 css/style.css     디자인
 js/engine.js      배정 엔진(입력 해석, 최적화, 규칙 검사, 시수 계산)
 js/excel.js       엑셀 읽기/쓰기
-js/app.js         화면 동작, 자동 저장, 백업
+js/app.js         화면 동작, 자동 저장, 백업, 설명서, 접속 암호 화면
+js/config.js      접속 암호 확인용 Supabase 주소·공개 키
+js/auth.js        접속 암호 확인·변경 호출
+docs/supabase-access.sql  Supabase 쪽 표·함수 원본
 vendor/           ExcelJS 4.4.0 (MIT)
 tests/            엔진 테스트 (node tests/engine.test.js), 검증 리포트 (node tests/verify.js)
 main.py, keygen.py  예전 파이썬(PyQt) 프로그램 — 참고용으로 남겨 둠

@@ -471,6 +471,25 @@ th.co-host .co, td.co-host .co { left: -6px; top: -6px; }
 h4.co-host, summary.co-host, .field.co-host { padding-left: 14px; }
 .chips.co-host .co { left: -5px; top: -11px; }
 
+/* ---------------- 접속 암호 화면 ---------------- */
+.gate { position: fixed; inset: 0; z-index: 90; /* 상단 바(40)보다 위, 모달(100)보다 아래 */ display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--bg); }
+.gate[hidden] { display: none; }
+body.locked > :not(.gate):not(.toast):not(.modal-back) { visibility: hidden; }
+.gate-box { width: min(380px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-2); padding: 28px 28px 22px; display: flex; flex-direction: column; gap: 8px; }
+.gate-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.gate-brand b { font-size: 16px; letter-spacing: -.01em; }
+.gate-label { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.gate-input { height: 40px; font-size: 15px; letter-spacing: .08em; }
+.gate-msg { min-height: 18px; font-size: 12.5px; color: var(--bad); margin: 0; }
+.gate-msg.info { color: var(--ink-3); }
+.gate-btn { height: 40px; font-size: 14px; }
+.gate-foot { margin: 10px 0 0; text-align: center; }
+.linklike { border: none; background: none; color: var(--ink-3); font-size: 12px; cursor: pointer; text-decoration: underline; padding: 2px 4px; }
+.linklike:hover { color: var(--accent); }
+.gate-form { display: flex; flex-direction: column; gap: 8px; }
+.gate-form label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.gate-form input { height: 34px; font-weight: 400; }
+
 .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: #111827; color: #fff; padding: 9px 16px; border-radius: 8px; z-index: 200; box-shadow: var(--shadow-2); max-width: 90vw; font-size: 12.5px; }
 
 @media (max-width: 900px) {
