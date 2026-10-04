@@ -79,7 +79,7 @@
   // ---------------------------------------------------------------
   // 상태
   // ---------------------------------------------------------------
-  const emptyCell = () => ({ name: '', study: [], exclude: [], special: false, room: '' });
+  const emptyCell = () => ({ name: '', study: [], exclude: [], special: false, room: '', multi: false });
   const newDay = (periods) => ({ date: '', periods: periods || 3, subjects: Array.from({ length: periods || 3 }, () => [emptyCell(), emptyCell(), emptyCell()]), exceptions: [] });
   const newTeacher = () => ({ name: '', subject: '', homeroom: '', type: '일반', target: '', prev: '' });
 
@@ -105,7 +105,7 @@
       if (!room) room = (star[1] || '').trim();
       name = (name.slice(0, star.index) + name.slice(star.index + star[0].length)).trim();
     }
-    return { name, study: Array.isArray(c.study) ? c.study.map(Number) : [], exclude: Array.isArray(c.exclude) ? c.exclude.map(Number) : [], special, room };
+    return { name, study: Array.isArray(c.study) ? c.study.map(Number) : [], exclude: Array.isArray(c.exclude) ? c.exclude.map(Number) : [], special, room, multi: !!c.multi || name.includes('/') };
   }
 
   function normalizeState(s) {
@@ -278,18 +278,22 @@
   function panelHead(title, topic, desc, right) {
     return `<div class="panel-head"><h2>${title}</h2>${topic ? helpDot(topic) : ''}${desc ? `<span class="desc">${desc}</span>` : ''}<span class="spacer"></span>${right || ''}</div>`;
   }
+  const TOPIC_KEY = { s1: 'setup', s2: 'subjects', s3: 'teachers', s5: 'result' };
   function guide(items, topic) {
-    return `<div class="guide"><b>할 일</b><ol>${items.map((x) => `<li>${x}</li>`).join('')}</ol><span class="spacer"></span><button class="btn sm" data-act="help" data-topic="${topic}">자세히</button></div>`;
-  }
-  function stepNav(key) {
+    const key = TOPIC_KEY[topic];
     const i = stepIndex(key);
-    const prev = STEPS[i - 1], next = STEPS[i + 1], cur = STEPS[i];
-    return `<div class="stepnav">
-      ${prev ? `<button class="btn" data-act="goto" data-tab="${prev.key}">← ${i}. ${prev.title}</button>` : '<span></span>'}
-      <span class="tip">${next ? `<b>다음 단계:</b> ${cur.next}` : '결과가 마음에 들면 <b>엑셀로 저장</b>하고, 다음 회차를 준비하려면 <b>누적 반영</b>을 누르세요.'}</span>
-      ${next ? `<button class="btn primary" data-act="goto" data-tab="${next.key}">${i + 2}. ${next.title} →</button>` : ''}
+    const prev = STEPS[i - 1], next = STEPS[i + 1];
+    return `<div class="guide">
+      <b>할 일</b><ol>${items.map((x) => `<li>${x}</li>`).join('')}</ol>
+      <span class="spacer"></span>
+      <span class="nav">
+        <button class="btn sm" data-act="help" data-topic="${topic}">자세히</button>
+        ${prev ? `<button class="btn sm" data-act="goto" data-tab="${prev.key}" title="${prev.title}">← ${i}</button>` : ''}
+        ${next ? `<button class="btn sm primary" data-act="goto" data-tab="${next.key}" title="${next.title}">다음 ${i + 2}. ${next.title} →</button>` : ''}
+      </span>
     </div>`;
   }
+  const stepNav = () => '';
   const sw = (bind, on, extra) => `<label class="switch"><input type="checkbox" data-bind="${bind}" ${extra || ''} ${on ? 'checked' : ''}><i></i></label>`;
 
   // ---------------------------------------------------------------
@@ -366,7 +370,7 @@
       <span class="spacer"></span>
       <button class="btn sm ghost danger" data-act="reset-all">전체 초기화</button>
     </div>
-    ${stepNav('setup')}`;
+`;
   };
 
   // ---------------------------------------------------------------
@@ -382,10 +386,10 @@
     const rooms = fullStudy && !state.options.studyHallClassroom ? 0 : open.length;
     const parts = [];
     if (rooms) parts.push(`교실 ${rooms}`);
-    if (pc.special) parts.push(`추가반 ${pc.room}`);
+    if (pc.special) parts.push('추가반');
     if (state.options.corridors) parts.push(`복도 ${state.options.corridors}`);
     let text = parts.join(' · ');
-    if (fullStudy) text = '전체 자습 · ' + text;
+    if (fullStudy) text = '전체자습 · ' + text;
     return { cls: pc.special ? 'special' : '', text };
   }
 
@@ -393,17 +397,21 @@
     const cell = state.days[d].subjects[p - 1][g - 1];
     const cc = state.classes[g - 1];
     const b = `days.${d}.subjects.${p - 1}.${g - 1}`;
+    const key = `${d},${p},${g}`;
     const chips = (kind, list) => range(1, cc).map((c) => `<button class="chip ${list.includes(c) ? 'on' : ''}" data-act="chip" data-kind="${kind}" data-d="${d}" data-p="${p}" data-g="${g}" data-c="${c}" title="${c}반 ${kind === 'study' ? '자습' : '감독 제외'}">${c}</button>`).join('');
-    const allOn = cell.study.length >= cc;
+    const parts = cell.name.split('/').map((x) => x.trim());
+    const multi = cell.multi || parts.length > 1;
     const sum = cellSummary(d, p, g);
     return `<div class="sc">
       <div class="sc-row">
-        <input class="sc-name" data-bind="${b}.name" data-subj="${d},${p},${g}" value="${esc(cell.name)}" placeholder="과목명 (비우면 시험 없음)">
-        <button class="sc-sp ${cell.special ? 'on' : ''}" data-act="sp-toggle" data-d="${d}" data-p="${p}" data-g="${g}" title="이동수업 등으로 교실이 하나 더 필요할 때">${cell.special ? '추가반 ✓' : '+ 추가반'}</button>
+        <input class="sc-name" data-subjpart="${key},0" value="${esc(parts[0] || '')}" placeholder="${multi ? '과목 1' : '과목명 (비우면 시험 없음)'}">
+        ${multi ? `<input class="sc-name" data-subjpart="${key},1" value="${esc(parts.slice(1).join('/'))}" placeholder="과목 2">` : ''}
+        ${cell.special ? `<input class="sc-room" data-bind="${b}.room" data-subj="${key}" value="${esc(cell.room)}" placeholder="장소" title="추가반 장소 (예: 음악실)">` : ''}
+        <button class="sc-mini ${multi ? 'on' : ''}" data-act="subj-multi" data-d="${d}" data-p="${p}" data-g="${g}" title="${multi ? '두 번째 과목 칸 닫기' : '같은 교시에 시험 과목이 둘일 때'}">${multi ? '−과목' : '+과목'}</button>
+        <button class="sc-mini sp ${cell.special ? 'on' : ''}" data-act="sp-toggle" data-d="${d}" data-p="${p}" data-g="${g}" title="${cell.special ? '추가반 닫기' : '이동수업 등으로 교실이 하나 더 필요할 때'}">${cell.special ? '추가반✓' : '+추가반'}</button>
       </div>
-      ${cell.special ? `<div class="sc-row"><input class="sc-room" data-bind="${b}.room" data-subj="${d},${p},${g}" value="${esc(cell.room)}" placeholder="추가반 장소 (예: 음악실)"></div>` : ''}
-      <div class="sc-row"><span class="chips study"><b>자습</b><button class="chip all ${allOn ? 'on' : ''}" data-act="chip-all" data-d="${d}" data-p="${p}" data-g="${g}" title="전체 자습">전</button>${chips('study', cell.study)}</span></div>
-      <div class="sc-row"><span class="chips excl"><b>제외</b>${chips('exclude', cell.exclude)}</span><span class="sc-sum ${sum.cls}" data-sum="${d},${p},${g}">${esc(sum.text)}</span></div>
+      <div class="sc-row"><span class="chips study"><button class="chips-lbl" data-act="chip-all" data-kind="study" data-d="${d}" data-p="${p}" data-g="${g}" title="전체 자습 켜기/끄기">자습</button>${chips('study', cell.study)}</span></div>
+      <div class="sc-row"><span class="chips excl"><button class="chips-lbl" data-act="chip-all" data-kind="exclude" data-d="${d}" data-p="${p}" data-g="${g}" title="전체 제외 켜기/끄기">제외</button>${chips('exclude', cell.exclude)}</span><span class="sc-sum ${sum.cls}" data-sum="${key}" title="${esc(sum.text)}">${esc(sum.text)}</span></div>
     </div>`;
   }
 
@@ -426,7 +434,7 @@
       </div>
       </div>
     </div>
-    ${stepNav('subjects')}`;
+`;
   };
 
   function periodOrder() {
@@ -525,12 +533,12 @@
 
         <div class="panel">
           ${panelHead('일차·교시별 예외 감독자', 's4-exceptions')}
-          <div class="panel-body" style="padding:8px">
+          <div class="panel-body ex-grid" style="padding:8px">
           ${state.days.map((day, d) => `
             <div class="day-card day-c${d % 4}">
               <div class="day-head"><span class="day-pill day-c${d % 4}">${d + 1}일차</span><b>${esc(day.date) || ''}</b><span class="spacer"></span><button class="btn sm" data-act="ex-add" data-d="${d}">+ 추가</button></div>
               <table class="grid dense">
-                ${day.exceptions.length ? `<thead><tr><th style="width:96px">교시</th><th>이름</th><th>사유</th><th style="width:30px"></th></tr></thead>` : ''}
+                ${day.exceptions.length ? `<thead><tr><th style="width:66px">교시</th><th>이름</th><th>사유</th><th style="width:26px"></th></tr></thead>` : ''}
                 <tbody>${day.exceptions.map((x, i) => {
                   const pv = E.parsePeriodValue(x.period);
                   const opts = ['<option value="">선택</option>'].concat(range(1, day.periods).map((p) => `<option value="${p}" ${pv === p ? 'selected' : ''}>${p}교시</option>`), [`<option value="전체" ${pv === 'all' ? 'selected' : ''}>종일</option>`]);
@@ -547,7 +555,7 @@
         </div>
       </div>
     </div>
-    ${stepNav('teachers')}`;
+`;
   };
   renderers.extras = () => renderers.teachers();
 
@@ -647,7 +655,7 @@
       </div>
     </div>
     ${body}
-    ${stepNav('result')}`;
+`;
   };
 
   function slotCell(model, ev, s) {
@@ -1077,10 +1085,10 @@
       <p>일차별 표에서 교시마다 1·2·3학년의 시험 과목을 적습니다. 칸 하나는 다음으로 이루어집니다.</p>
       <table>
         <tr><th>항목</th><th>설명</th></tr>
-        <tr><td>과목명</td><td>그 교시 그 학년의 시험 과목. <b>비워 두면 "시험 없음"</b>으로 보고 감독을 넣지 않습니다. <code>자습</code>이라고 적으면 학년 전체 자습입니다. 여러 과목이 같은 시간에 치러지면 <code>세계사/화학</code>처럼 <code>/</code>로 적습니다(두 과목 교사 모두 그 시간 감독에서 빠집니다).</td></tr>
-        <tr><td>+ 추가반</td><td>이동수업 등으로 교실이 하나 더 필요할 때 누릅니다. 옆에 나타나는 칸에 장소(예: 음악실)를 적으면 결과와 엑셀에 그 이름이 들어가고, 비우면 "8반"처럼 마지막 반 다음 번호가 됩니다.</td></tr>
-        <tr><td>자습 번호</td><td>${swatch('#ffe58a')}그 반이 자습임을 표시합니다. 자습 교실 감독은 "자습 시수"로 따로 셉니다. <b>전</b>을 누르면 모든 반을 한 번에 켜고 끕니다.</td></tr>
-        <tr><td>제외 번호</td><td>${swatch('#ffc9c9')}그 반에는 감독을 넣지 않습니다(예: 그 반 학생 전원이 다른 곳에서 시험). 같은 반을 자습과 제외에 동시에 켤 수 없으며, 나중에 누른 쪽이 남습니다.</td></tr>
+        <tr><td>과목명</td><td>그 교시 그 학년의 시험 과목. <b>비워 두면 "시험 없음"</b>으로 보고 감독을 넣지 않습니다. <code>자습</code>이라고 적으면 학년 전체 자습입니다. 같은 시간에 두 과목이 치러지면 <b>+과목</b>을 눌러 두 번째 칸에 적습니다(두 과목 교사 모두 그 시간 감독에서 빠집니다). 결과·엑셀에는 <code>세계사/화학</code>처럼 표시됩니다.</td></tr>
+        <tr><td>+추가반</td><td>이동수업 등으로 교실이 하나 더 필요할 때 누릅니다. 옆에 나타나는 칸에 장소(예: 음악실)를 적으면 결과와 엑셀에 그 이름이 들어가고, 비우면 "8반"처럼 마지막 반 다음 번호가 됩니다.</td></tr>
+        <tr><td>자습 번호</td><td>${swatch('#ffe58a')}그 반이 자습임을 표시합니다. 자습 교실 감독은 "자습 시수"로 따로 셉니다. <b>자습</b> 글자를 누르면 모든 반을 한 번에 켜고 끕니다.</td></tr>
+        <tr><td>제외 번호</td><td>${swatch('#ffc9c9')}그 반에는 감독을 넣지 않습니다(예: 그 반 학생 전원이 다른 곳에서 시험). <b>제외</b> 글자를 누르면 모든 반을 한 번에 켜고 끕니다. 같은 반을 자습과 제외에 동시에 켤 수 없으며, 나중에 누른 쪽이 남습니다.</td></tr>
         <tr><td>요약 줄</td><td>칸 오른쪽 아래에 "교실 7 · 복도 2"처럼 그 칸에서 생기는 감독 자리 수가 바로 표시됩니다.</td></tr>
       </table>
       <div class="note">학년 전체가 자습인 교시(<code>자습</code>이라고 적거나 모든 반의 자습 번호를 켠 경우)는 1단계의 "전체 자습 교시에도 교실 감독" 옵션에 따라 교실 감독을 넣거나 복도 감독만 둡니다.</div>
@@ -1194,6 +1202,14 @@
 
   document.addEventListener('input', (e) => {
     const el = e.target;
+    if (el.dataset && el.dataset.subjpart) {
+      const [d, p, g] = el.dataset.subjpart.split(',').map(Number);
+      const td = el.closest('td');
+      const parts = $$('[data-subjpart]', td).map((x) => x.value.trim()).filter(Boolean);
+      state.days[d].subjects[p - 1][g - 1].name = parts.join('/');
+      save(); refreshCellSummary(d, p, g); deferRender(updateBadges, 400);
+      return;
+    }
     const bind = el.dataset && el.dataset.bind;
     if (!bind) return;
     let val = el.type === 'checkbox' ? el.checked : el.value;
@@ -1242,9 +1258,9 @@
     const el = e.target;
     const text = (e.clipboardData || window.clipboardData).getData('text');
     if (!text || !/[\t\n]/.test(text.replace(/\n$/, ''))) return;
-    if (el.dataset && el.dataset.subj && el.classList.contains('sc-name')) {
+    if (el.dataset && el.dataset.subjpart) {
       e.preventDefault();
-      const [d, p, g] = el.dataset.subj.split(',').map(Number);
+      const [d, p, g] = el.dataset.subjpart.split(',').map(Number);
       const n = applySubjectGrid(parseClipboardGrid(text), d, p, g);
       save(); renderers.subjects(); updateBadges(); toast(`${n}칸을 붙여넣었습니다.`);
     } else if (el.dataset && el.dataset.tcell) {
@@ -1293,14 +1309,29 @@
         return;
       }
       case 'chip-all': {
-        const d = +el.dataset.d, p = +el.dataset.p, g = +el.dataset.g;
+        const d = +el.dataset.d, p = +el.dataset.p, g = +el.dataset.g, kind = el.dataset.kind || 'study';
         const cell = state.days[d].subjects[p - 1][g - 1];
         const cc = state.classes[g - 1];
-        if (cell.study.length >= cc) cell.study = [];
-        else { cell.study = range(1, cc); cell.exclude = []; }
+        const other = kind === 'study' ? 'exclude' : 'study';
+        if (cell[kind].length >= cc) cell[kind] = [];
+        else { cell[kind] = range(1, cc); cell[other] = []; }
         save();
         const td = $(`#sc-${d}-${p}-${g}`);
         if (td) td.innerHTML = subjectCellHTML(d, p, g);
+        deferRender(updateBadges, 300);
+        return;
+      }
+      case 'subj-multi': {
+        const d = +el.dataset.d, p = +el.dataset.p, g = +el.dataset.g;
+        const cell = state.days[d].subjects[p - 1][g - 1];
+        const parts = cell.name.split('/').map((x) => x.trim()).filter(Boolean);
+        if (cell.multi || parts.length > 1) {
+          if (parts.length > 1 && !(await confirmBox('과목 칸 닫기', `두 번째 과목 "${esc(parts.slice(1).join('/'))}"을(를) 지우고 칸을 닫을까요?`, '닫기', 'orange'))) return;
+          cell.name = parts[0] || ''; cell.multi = false;
+        } else cell.multi = true;
+        save();
+        const td = $(`#sc-${d}-${p}-${g}`);
+        if (td) { td.innerHTML = subjectCellHTML(d, p, g); const inp = $('[data-subjpart$=",1"]', td); if (inp) inp.focus(); }
         deferRender(updateBadges, 300);
         return;
       }

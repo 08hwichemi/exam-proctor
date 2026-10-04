@@ -40,6 +40,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 body {
+  min-height: 100vh; display: flex; flex-direction: column;
   background: var(--bg);
   color: var(--ink);
   font: 13px/1.45 "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
@@ -100,10 +101,10 @@ kbd { font: 11px/1 ui-monospace, Consolas, monospace; border: 1px solid var(--li
 .step.bad small { color: var(--bad); }
 .step.warn small { color: var(--warn); }
 
-main { padding: 14px 20px 32px; max-width: 1720px; margin: 0 auto; }
+main { flex: 1; padding: 12px 16px 20px; width: 100%; }
 .tab { display: none; }
 .tab.active { display: block; }
-footer { text-align: right; color: var(--ink-3); font-size: 11px; padding: 0 20px 18px; }
+footer { text-align: right; color: var(--ink-3); font-size: 11px; padding: 0 16px 12px; }
 
 /* ---------------- 공통 ---------------- */
 .panel {
@@ -125,8 +126,8 @@ footer { text-align: right; color: var(--ink-3); font-size: 11px; padding: 0 20p
 .help-dot:hover { color: var(--accent); border-color: var(--accent); }
 
 .guide {
-  display: flex; align-items: flex-start; gap: 10px;
-  padding: 8px 12px; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px 6px 12px; margin-bottom: 10px;
   background: var(--accent-soft); border: 1px solid #d8dcf7; border-radius: var(--r-sm);
   color: #2b3690; font-size: 12.5px;
 }
@@ -135,14 +136,9 @@ footer { text-align: right; color: var(--ink-3); font-size: 11px; padding: 0 20p
 .guide ol { margin: 0; padding-left: 18px; display: flex; flex-wrap: wrap; gap: 2px 22px; }
 .guide .spacer { flex: 1; }
 .guide .btn.sm { background: #fff; }
+.guide .btn.sm.primary { background: var(--accent); }
+.guide .nav { display: inline-flex; gap: 6px; flex: none; }
 
-.stepnav {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 14px; margin-top: 4px;
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
-}
-.stepnav .tip { color: var(--ink-2); font-size: 12.5px; flex: 1; }
-.stepnav .tip b { color: var(--ink); }
 
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .row.tight { gap: 6px; }
@@ -244,56 +240,62 @@ details.issue-group[open] > summary::before { content: "▾"; }
 .day-pill { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 10px; font-size: 11.5px; font-weight: 700; background: var(--day-soft, var(--surface-2)); color: var(--day, var(--ink-2)); border: 1px solid var(--day-line, var(--line)); white-space: nowrap; }
 
 /* ---------------- 2. 시험 과목 ---------------- */
-.days-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(720px, 1fr)); gap: 12px; align-items: start; }
+.days-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(700px, 1fr)); gap: 12px; align-items: start; }
 .day-card { border: 1px solid var(--day-line, var(--line)); border-radius: var(--r-md); overflow: hidden; background: var(--surface); margin-bottom: 10px; }
 .days-grid .day-card { margin-bottom: 0; }
 .day-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--day-soft, var(--surface-2)); border-bottom: 1px solid var(--day-line, var(--line)); }
 .day-head b { font-size: 13px; }
 .day-head .muted { font-size: 12px; }
 .subj-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.subj-table th, .subj-table td { border-top: 1px solid var(--line); border-left: 1px solid var(--line); padding: 5px 6px; vertical-align: top; }
+.subj-table th, .subj-table td { border-top: 1px solid var(--line); border-left: 1px solid var(--line); padding: 5px 6px; vertical-align: top; overflow: hidden; }
 .subj-table thead th { border-top: none; background: #fff; font-size: 12px; font-weight: 600; color: var(--ink-2); padding: 5px 6px; }
 .subj-table th:first-child, .subj-table td:first-child { width: 44px; border-left: none; text-align: center; vertical-align: middle; padding: 4px 2px; }
 .subj-table td:first-child small { display: block; font-size: 10px; color: var(--ink-3); margin-top: 2px; }
 .subj-table tbody tr:nth-child(even) td { background: #fbfbfd; }
 .p-badge { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--day-soft, var(--surface-2)); color: var(--day, var(--ink-2)); border: 1px solid var(--day-line, var(--line)); font-weight: 700; font-size: 12px; }
 .sc { display: flex; flex-direction: column; gap: 4px; }
-.sc-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; min-height: 22px; }
-.sc-name { flex: 1 1 100px; height: 28px; font-weight: 600; text-align: center; padding: 0 6px; }
-.sc-name::placeholder { font-weight: 400; color: var(--ink-3); font-size: 12px; }
-.sc-sp { height: 28px; padding: 0 7px; border: 1px dashed var(--line-strong); border-radius: var(--r-sm); background: #fff; color: var(--ink-3); font-size: 11.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-.sc-sp:hover { border-color: var(--special); color: var(--special); }
-.sc-sp.on { border-style: solid; border-color: var(--special); background: #f1edff; color: var(--special); }
-.sc-room { height: 26px; width: 100%; font-size: 12px; border-color: #c9bdf3; background: #faf8ff; }
-.chips { display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; }
-.chips > b { font-size: 11px; width: 22px; flex: none; }
-.chips.study > b { color: var(--study-ink); }
-.chips.excl > b { color: var(--excl-ink); }
+.sc-row { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; min-height: 20px; }
+.sc-name { flex: 1 1 60px; min-width: 0; height: 28px; font-weight: 600; text-align: center; padding: 0 5px; }
+.sc-name::placeholder { font-weight: 400; color: var(--ink-3); font-size: 11.5px; }
+.sc-mini { flex: none; height: 28px; padding: 0 5px; border: 1px dashed var(--line-strong); border-radius: var(--r-sm); background: #fff; color: var(--ink-3); font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.sc-mini:hover { border-color: var(--ink-2); color: var(--ink-2); }
+.sc-mini.on { border-style: solid; border-color: var(--line-strong); background: var(--surface-2); color: var(--ink-2); }
+.sc-mini.sp:hover { border-color: var(--special); color: var(--special); }
+.sc-mini.sp.on { border-color: var(--special); background: #f1edff; color: var(--special); }
+.sc-room { flex: 0 1 84px; min-width: 56px; height: 28px; font-size: 12px; padding: 0 5px; border-color: #c9bdf3; background: #faf8ff; }
+.chips { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.chips-lbl { width: 26px; height: 20px; padding: 0; border: none; background: none; font-size: 11px; font-weight: 700; cursor: pointer; text-align: left; border-radius: 3px; }
+.chips-lbl:hover { text-decoration: underline; }
+.chips.study .chips-lbl { color: var(--study-ink); }
+.chips.excl .chips-lbl { color: var(--excl-ink); }
 .chip {
-  min-width: 21px; height: 21px; padding: 0 3px; font-size: 11px; line-height: 19px;
+  min-width: 20px; height: 20px; padding: 0 3px; font-size: 11px; line-height: 18px;
   border: 1px solid var(--line-strong); background: #fff; border-radius: 4px; cursor: pointer; color: var(--ink-2);
 }
 .chip:hover { border-color: #8b94a3; }
 .chip.all { font-size: 10px; color: var(--ink-3); }
 .chips.study .chip.on { background: #ffe58a; border-color: #e5b93c; color: var(--study-ink); font-weight: 700; }
 .chips.excl .chip.on { background: #ffc9c9; border-color: #e76f6f; color: var(--excl-ink); font-weight: 700; text-decoration: line-through; }
-.sc-sum { margin-left: auto; font-size: 10.5px; color: var(--ink-3); white-space: nowrap; }
+.sc-sum { flex: 1 1 0; min-width: 0; margin-left: 6px; font-size: 10.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
 .sc-sum.special { color: var(--special); }
 .sc-sum.none { color: var(--ink-3); font-style: italic; }
 .legend { display: inline-flex; gap: 10px; font-size: 12px; color: var(--ink-2); }
 .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; border: 1px solid rgba(0,0,0,.08); }
 
 /* ---------------- 3. 교사 명단 · 예외 ---------------- */
-.teachers-layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; align-items: start; }
+.teachers-layout { display: grid; grid-template-columns: minmax(600px, 760px) minmax(0, 1fr); gap: 12px; align-items: start; }
 .side-col { display: flex; flex-direction: column; gap: 12px; }
 .side-col .panel { margin-bottom: 0; }
-.side-col .day-card { margin-bottom: 8px; }
-.side-col .day-card:last-child { margin-bottom: 0; }
+.ex-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: 8px; align-items: start; }
+.ex-grid table.grid th:first-child, .ex-grid table.grid td:first-child { width: 66px; }
+.ex-grid table.grid td select { padding-right: 18px; background-position: right 5px center; }
+.ex-grid .day-head { padding: 5px 8px; }
+.ex-grid .day-card { margin-bottom: 0; }
 .tbl-wrap { overflow: auto; max-height: calc(100vh - 330px); border: 1px solid var(--line); border-radius: 6px; }
 .panel-foot { padding: 8px 14px; border-top: 1px solid var(--line); }
 table.grid.dense th, table.grid.dense td { height: 32px; padding: 2px 4px; }
 table.grid.dense td input, table.grid.dense td select { height: 26px; padding: 0 6px; }
-@media (max-width: 1280px) { .teachers-layout { grid-template-columns: 1fr; } }
+@media (max-width: 1280px) { .teachers-layout { grid-template-columns: 1fr; } .tbl-wrap { max-height: 60vh; } }
 
 /* ---------------- 5. 결과 ---------------- */
 .actionbar { position: sticky; top: 106px; z-index: 20; }
