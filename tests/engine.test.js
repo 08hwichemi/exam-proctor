@@ -184,4 +184,39 @@ for (const [seed, term] of [[1, '1차 고사'], [2, '2차 고사'], [3, '4차 �
   }
 }
 assert.strictEqual(worse, 0, '새 엔진이 기존 방식보다 나쁜 경우가 있습니다');
+
+// ---- 같은 교실 금지 (이번 시험 / 이전 회차 이력)
+{
+  const state = makeState(9, '2차 고사');
+  state.options.noRepeatRoom = true;
+  state.options.roomHistoryScope = 'year';
+  state.roomHistory = { '교사30': ['1-1', '1-2', '1-3', '2-1', '2-2'], '교사31': ['3-5'] };
+  const model = E.buildModel(state);
+  const res = E.optimize(model, { seed: 9, runs: 1 });
+  const ev = E.evaluate(model, res.assign);
+  assert.strictEqual(ev.summary.shortage, 0);
+  assert.strictEqual(ev.summary.violations, 0, JSON.stringify(ev.violations));
+  assert.strictEqual(ev.summary.repeatRooms, 0);
+  model.slots.forEach((s) => { if (res.assign[s.id] === '교사30') assert.ok(!state.roomHistory['교사30'].includes(E.roomKey(s) || ''), '이전 회차 교실에 다시 배정됨'); });
+  // 1차 고사에서는 이력을 무시
+  state.term = '1차 고사';
+  assert.strictEqual(E.buildModel(state).useHistory, false);
+  console.log('같은 교실 금지 테스트 통과');
+}
+
+// ---- 3학년 담임 연간 보정: 1~3차에서만, 3학년 담임/부장에게만 누적을 낮춰 봄
+{
+  const state = makeState(10, '2차 고사');
+  state.options.compensate3rd = 1;
+  const model = E.buildModel(state);
+  const g3 = model.teachers.find((t) => t.homeroom.g === 3 && t.homeroom.c != null);
+  const head3 = model.teachers.find((t) => t.homeroom.head && t.homeroom.g === 3);
+  const g2 = model.teachers.find((t) => t.homeroom.g === 2);
+  assert.strictEqual(g3.prevAdj, g3.prev - 2);
+  assert.strictEqual(head3.prevAdj, head3.prev - 2);
+  assert.strictEqual(g2.prevAdj, g2.prev);
+  state.term = '4차 고사';
+  assert.ok(E.buildModel(state).teachers.every((t) => t.prevAdj === t.prev));
+  console.log('3학년 담임 보정 테스트 통과');
+}
 console.log('\n통합 테스트 통과');
