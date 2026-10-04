@@ -5,7 +5,7 @@
 ## 지금 상태
 
 - 파이썬(PyQt) 시험 감독 배정 프로그램(`main.py`)을 **서버 없는 웹앱**으로 옮겨 `main` 브랜치에 병합 완료. GitHub Pages 주소: `https://08hwichemi.github.io/exam-proctor/` (Pages 설정은 저장소 Settings → Pages에서 `main` / root).
-- 작업 브랜치 `claude/happy-shannon-wu6197`는 `main`과 같은 상태. 지금까지 PR #1~#6을 모두 병합했음.
+- PR #1~#7 병합 완료. 이후 작업 브랜치 `claude/beautiful-lamport-g36no8`(PR #8: 교사 탭 창 높이 맞춤, 결과 요약 칩).
 - 암호(라이선스 키)는 제거. `keygen.py`, `main.py`는 참고용으로만 남아 있음(비밀 단어가 공개 저장소에 노출되어 있으니 파이썬 버전을 계속 배포한다면 바꿔야 함).
 
 ## 파일 구성
@@ -13,7 +13,7 @@
 | 파일 | 역할 |
 |---|---|
 | `index.html` | 뼈대. 상단 바, 단계 표시(`#steps`), 4개 탭 섹션 |
-| `css/style.css` | 디자인 체계(13px 기준, CSS 변수, 일차 색 4종 `day-c0~3`) |
+| `css/style.css` | 디자인 체계(13px 기준, CSS 변수, 일차 색 4종 `day-c0~3`). 교사 탭·결과 탭은 `--chrome-h`로 창 높이에 맞추고 표 안에서만 스크롤 |
 | `js/engine.js` | 배정 엔진. 입력 해석(`parseCell`, `parseHomeroom`), 모델(`buildModel`), 최적화(`createOptimizer`: 그리디 초안 + 담금질), 검사(`evaluate`), 서명(`inputSignature`). Node에서도 로드됨 |
 | `js/excel.js` | ExcelJS로 교사 명단·이전 결과 읽기, 결과 3개 시트 쓰기(`exportResult`) |
 | `js/app.js` | 화면 전부. 상태(`state`), 자동 저장(localStorage `examProctor.v2`), 백업 파일, 예전 DATA SAVE 변환(`fromLegacy`), 4개 탭 렌더러, 결과 수정 모달, 설명서 |
@@ -44,6 +44,9 @@ cell = { name, study: [반], exclude: [반], special, room, multi }
 - 같은 교실 두 번 금지 옵션은 기본 켬(이번 시험 안에서). 검증상 부족 자리·시수 차이에 영향 없음.
 - 엔진 결과는 이론상 하한선과 같거나 1시간 차(55명 사례). 남는 차이는 규칙(본인 시험이 많은 과목, 고사담당 1교시) 때문.
 - 디자인 방향: 상용 프로그램처럼 절제된 색, 밀도 높은 배치, 스크롤 최소화. 사용자는 24인치(약 1920~2000px)와 노트북(1366px)에서 봄.
+- 교사 탭(명단·특수실·예외)과 결과 탭은 페이지 스크롤 없이 탭 높이를 창에 맞추고(`#tab-*.active` flex 열, 높이 `100vh - var(--chrome-h)`), 긴 표는 각자 안에서 스크롤. 1280px 이하에서는 세로 쌓임으로 돌아감.
+- 결과 요약(부족·위반·누적 범위·평균·교실중복·📌)은 큰 카드 대신 배정 머리줄의 작은 칩(`kpiHTML`)으로 둬 표 높이를 확보.
+- 추가반은 교시·학년당 하나(두 과목이 동시에 치러져도 교실은 하나만 추가). 과목별 추가반은 사용자가 필요 없다고 확인함(2026-10-04).
 
 ## 검증 방법
 
