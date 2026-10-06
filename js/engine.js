@@ -19,6 +19,8 @@
     TOT: 1000,      // 총 시수(누적 포함) 편차
     SUB: 300,       // 복도+자습 시수 편차
     KIND: 150,      // 복도·자습 각각의 편차 (한 사람이 복도만/자습만 하지 않게)
+    ITIN: 3000,     // 순회 교사가 들어갈 수 있는데 비어 있는 교시 1개 (순회는 누적 시수와 무관하게 복도·자습 우선)
+    ITIN_BAL: 50,   // 순회끼리의 시수 편차
     CLS: 300,       // 교실 시수 편차
     DAY: 100,       // 하루에 몰림
     CONS: 40,       // 두 교시 연속
@@ -218,14 +220,17 @@
         }
         if (pc.special) {
           // 추가반 = 그 번호의 반. 장소가 "8반"(또는 "8")처럼 번호면 결과표의 그 번호 열에 바로 넣음(colNo). 음악실 같은 이름만 "추가반" 열
+          // 추가반은 항상 "마지막 반 다음 번호"의 열(반 수 7이면 8반 열)에 들어감. 장소 이름(5층 국어교과실 등)은 칸 안에 작게 덧붙임.
+          // 장소를 "9반"처럼 반 수보다 큰 번호로 적으면 그 번호 열. 반 수 안의 번호(이미 있는 반)와 겹치면 추가반을 만들지 않고 알림
           const mRoom = /^(\d+)\s*반?$/.exec(pc.room);
           const roomNo = mRoom ? parseInt(mRoom[1], 10) : 0;
           const hasClassSlot = roomNo >= 1 && roomNo <= cc && !skipClassrooms && !pc.exclude.includes(roomNo);
           if (hasClassSlot) {
-            // 반 수가 8인데 추가반 장소도 "8반"이면 같은 교실이 둘이 되므로 추가반을 만들지 않고 알림
             dupSpecial[g] = (dupSpecial[g] || 0) + 1;
           } else {
-            push({ id: `${per.d}-${per.p}-${g}-sp`, kind: 'special', classNo: null, col: 'sp', room: roomNo ? `${roomNo}반` : pc.room, colNo: roomNo || null, study: pc.allStudy, label: `${g}-${roomNo ? roomNo + '반' : pc.room}${pc.allStudy ? '(자습)' : ''}` });
+            const colNo = roomNo || cc + 1;
+            const room = roomNo ? `${roomNo}반` : pc.room;
+            push({ id: `${per.d}-${per.p}-${g}-sp`, kind: 'special', classNo: null, col: 'sp', room, colNo, named: !roomNo && room !== `${colNo}반`, study: pc.allStudy, label: `${g}-${room}${pc.allStudy ? '(자습)' : ''}` });
           }
         }
         for (let k = 1; k <= corridors; k++) {
@@ -350,7 +355,7 @@
     const specialByCol = new Map();
     slots.forEach((s) => { if (s.kind === 'special' && s.colNo) specialByCol.set(`${s.d}-${s.p}-${s.grade}-${s.colNo}`, s); });
     const gridCols = Math.max(maxClasses, ...slots.map((s) => (s.kind === 'special' && s.colNo) || 0));
-    const hasNamedSpecial = slots.some((s) => s.kind === 'special' && !s.colNo);
+    const hasNamedSpecial = false; // 추가반은 모두 번호 열에 들어가므로 별도 "추가반" 열은 없음
     const colSlot = (d, p, g, c) => slotById.get(`${d}-${p}-${g}-c${c}`) || specialByCol.get(`${d}-${p}-${g}-${c}`) || null;
 
     const model = {
@@ -455,6 +460,8 @@
 
     // 자리별 후보 교사
     const cand = m.slots.map((s) => teachers.filter((t) => slotOK(m, t, s)).map((t) => t.ti));
+    // 교사별 들어갈 수 있는 교시 수 (순회 교사 벌점 계산용)
+    const availCnt = teachers.map((t) => { let n = 0; for (let p = 0; p < P; p++) if (m.availP[t.ti * P + p]) n++; return n; });
 
     // 상태
     const asg = new Int32Array(S);
@@ -508,7 +515,7 @@
       const tt = teachers[t], k = cnt[t], g = grp[t];
       let c = 0;
       if (g === 'balance') { const h = tt.prevAdj + k; c += W.TOT * h * h + W.SUB * sub[t] * sub[t] + W.CLS * cls[t] * cls[t] + W.KIND * (corr[t] * corr[t] + stu[t] * stu[t]); }
-      else if (g === 'itinerant') { const h = tt.prevAdj + k; c += W.TOT * h * h; }
+      else if (g === 'itinerant') { c += W.ITIN * (availCnt[t] - k) + W.ITIN_BAL * k * k; } // 순회: 시수와 상관없이 복도·자습에 최대한 넣음(들어갈 수 있는데 비는 교시마다 벌점), 순회끼리는 조금 고르게
       else if (g === 'senior' && tt.target != null && k < tt.target) c += W.SENIOR * (tt.target - k);
       if (tt.type !== '원로' && tt.target != null && k > tt.target) c += W.OVER * (k - tt.target);
       for (let d = 0, b = t * D; d < D; d++) {
