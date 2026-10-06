@@ -205,6 +205,20 @@ assert.strictEqual(worse, 0, '새 엔진이 기존 방식보다 나쁜 경우가
   console.log('같은 교실 금지 테스트 통과');
 }
 
+// ---- 예외 감독자 교시는 개인별 시간표에 "예외(사유)"로 표시 (화면·엑셀에서 회색 "제외")
+{
+  const state = makeState(4, '1차 고사');
+  const model = E.buildModel(state);
+  const res = E.optimize(model, { seed: 4, runs: 1 });
+  const ev = E.evaluate(model, res.assign);
+  const cellsOf = (name) => ev.stats.find((s) => s.name === name).cells;
+  const pi = (d, p) => model.periods.find((x) => x.d === d && x.p === p).pi;
+  assert.strictEqual(cellsOf('교사20')[pi(0, 1)], '예외(출장)');
+  assert.ok(cellsOf('교사20')[pi(0, 2)] !== '예외(출장)', '예외가 아닌 교시에는 표시하지 않음');
+  [1, 2, 3].forEach((p) => assert.strictEqual(cellsOf('교사21')[pi(1, p)], '예외(연가)', `2일차 ${p}교시 종일 예외`));
+  console.log('예외 감독자 표시 테스트 통과');
+}
+
 // ---- 3학년 담임 연간 보정: 1~3차에서만, 3학년 담임/부장에게만 누적을 낮춰 봄
 {
   const state = makeState(10, '2차 고사');

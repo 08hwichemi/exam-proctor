@@ -730,10 +730,14 @@
       if (t.type === '원로' && t.target != null && examHours > t.target) {
         m.periods.forEach((per) => assignedSlotsOf(per.pi).forEach((id) => { (violations[id] = violations[id] || []).push(`원로 목표시수(${t.target}) 초과`); }));
       }
-      // 본인 시험 표시
+      // 예외(출장·연가 등) / 본인 시험 / 특수실 표시 — 감독 자리가 없는 교시에만
       m.periods.forEach((per) => {
-        if (!st.cells[per.pi] && m.ownExam[t.ti * P + per.pi]) st.cells[per.pi] = '본인시험';
-        else if (!st.cells[per.pi] && t.isSpecial) st.cells[per.pi] = `특수(${t.specialRooms.map((r) => r.room).join('/')})`;
+        if (st.cells[per.pi]) return;
+        if (t.exceptAll.has(per.d) || t.exceptP.has(per.pi)) {
+          const ex = m.exceptions.find((x) => x.name === t.name && x.d === per.d && (x.period === 'all' || x.period === per.p));
+          st.cells[per.pi] = '예외' + (ex && ex.reason ? `(${ex.reason})` : '');
+        } else if (m.ownExam[t.ti * P + per.pi]) st.cells[per.pi] = '본인시험';
+        else if (t.isSpecial) st.cells[per.pi] = `특수(${t.specialRooms.map((r) => r.room).join('/')})`;
       });
     });
     Object.keys(violations).forEach((k) => { violations[k] = Array.from(new Set(violations[k])); });
