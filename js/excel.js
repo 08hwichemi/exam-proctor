@@ -148,12 +148,12 @@
         const kinds = [];
         for (let c = 1; c <= C; c++) {
           const s = model.colSlot(per.d, per.p, gi.grade, c);
-          if (s) { vals.push(assign[s.id] || '부족'); kinds.push(s); }
+          if (s) { vals.push((assign[s.id] || '부족') + (s.kind === 'special' && s.named ? `(${s.room})` : '')); kinds.push(s); }
           else { vals.push(gi.parsed.active && c <= model.classes[gi.grade - 1] && gi.parsed.exclude.includes(c) ? '(제외)' : ''); kinds.push(null); }
         }
         if (hasSpecial) {
           const s = model.slotById.get(`${per.d}-${per.p}-${gi.grade}-sp`);
-          const named = s && !s.colNo ? s : null;
+          const named = s && !s.colNo ? s : null; // (지금은 추가반이 모두 번호 열에 들어가므로 비어 있음)
           vals.push(named ? `${assign[named.id] || '부족'}(${named.room})` : ''); kinds.push(named);
         }
         for (let k = 1; k <= K; k++) {
@@ -177,7 +177,7 @@
           if (s && s.study) cell.fill = F.yellow;
           if (s && !assign[s.id]) { cell.font = { bold: true, color: { argb: 'FFC92A2A' } }; cell.fill = F.red; }
           if (cn === 4 && (gi.parsed.allStudy || gi.parsed.study.length)) cell.fill = F.yellow;
-          if (String(cell.value) === '(제외)') cell.font = { color: { argb: 'FF999999' }, size: 9 };
+          if (String(cell.value) === '(제외)') { cell.value = ''; cell.fill = F.gray; } // 제외반은 글자 없이 회색만
         });
       });
       ws1.mergeCells(startRow, 1, startRow + 2, 1);
