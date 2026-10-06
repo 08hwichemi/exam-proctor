@@ -631,10 +631,11 @@
             <span class="legend"><i style="background:#e9ecf1;border-color:#cfd4dc"></i>예외 제외</span>
             <span class="legend"><i style="background:#fce7f3"></i>예비</span>
             <span class="legend"><i style="background:#fef2f2;border-color:#f1b0b0"></i>부족</span>
-            <span class="muted">⚠ 규칙 위반(마우스를 올리면 이유) · 📌 직접 고친 칸</span>
+            <span class="muted">⚠ 규칙 위반(마우스를 올리면 이유) · 📌 고정 칸(칸 위 핀을 눌러 고정/해제)</span>
           </span>
           <span class="spacer"></span>
-          <span class="muted small">칸을 누르면 바꾸거나 맞바꿀 수 있습니다</span>
+          <label class="inline pinmode-switch ${ui.pinMode ? 'on' : ''}" title="켜 두면 칸을 누를 때마다 고정/해제만 됩니다"><input type="checkbox" data-act="pin-mode" ${ui.pinMode ? 'checked' : ''}> 📌 고정 모드</label>
+          <span class="muted small">${ui.pinMode ? '고정 모드: 칸을 누르면 고정/해제됩니다' : '칸을 누르면 바꾸거나 맞바꿀 수 있습니다'}</span>
           ${helpDot('s5-edit')}
         </div>
         <div class="panel-body" style="padding:8px">
@@ -667,7 +668,10 @@
 `;
   };
 
-  function slotCell(model, ev, s) {
+  // 📌 버튼: 칸에 마우스를 올리면 보이고, 누르면 창 없이 고정/해제
+  const pinBtn = (on, attrs) => `<button class="pinbtn ${on ? 'on' : ''}" ${attrs} title="${on ? '고정 풀기' : '이 칸 고정 (다시 돌려도 유지)'}" tabindex="-1">📌</button>`;
+
+  function slotCell(model, ev, s, col) {
     const r = state.result;
     const name = r.assign[s.id] || '';
     const v = ev.violations[s.id];
@@ -675,31 +679,34 @@
     const title = v ? v.join(', ') : '';
     // 추가반은 번호 열(8반)에 들어가고, 장소 이름이 따로 있으면 작게 덧붙임
     const label = name ? esc(name) + (s.kind === 'special' && s.named ? `<small class="muted">(${esc(s.room)})</small>` : '') : '부족';
-    return `<td class="${cls}" data-act="slot" data-id="${s.id}" title="${esc(title)}">${label}${r.pinned[s.id] ? '<span class="pin">📌</span>' : ''}</td>`;
+    return `<td class="${cls}" data-act="slot" data-id="${s.id}" ${col != null ? `data-c="${col}"` : ''} title="${esc(title)}">${label}${name || r.pinned[s.id] ? pinBtn(!!r.pinned[s.id], `data-act="pin-toggle" data-id="${s.id}"`) : ''}</td>`;
   }
 
   function gridTable(model, ev) {
     const C = model.gridCols, K = model.corridors;
     const hasSp = model.hasNamedSpecial;
-    let h = `<table class="res fill"><thead><tr><th>일차</th><th>교시</th><th>학년</th><th>과목</th>${range(1, C).map((c) => `<th>${c}반</th>`).join('')}${hasSp ? '<th>추가반</th>' : ''}${range(1, K).map((k) => `<th>복도${k}</th>`).join('')}<th>예비 (누적 적은 순)</th></tr></thead><tbody>`;
+    const heads = ['일차', '교시', '학년', '과목', ...range(1, C).map((c) => `${c}반`), ...(hasSp ? ['추가반'] : []), ...range(1, K).map((k) => `복도${k}`), '예비 (누적 적은 순)'];
+    let h = `<table class="res fill ${ui.pinMode ? 'pinmode' : ''}"><thead><tr>${heads.map((t, i) => `<th data-c="${i}">${t}</th>`).join('')}</tr></thead><tbody>`;
     let last = -1;
     model.periods.forEach((per) => {
-      if (last !== -1 && last !== per.d) h += `<tr class="day-sep"><td colspan="${6 + C + K + (hasSp ? 1 : 0)}"></td></tr>`;
+      if (last !== -1 && last !== per.d) h += `<tr class="day-sep"><td colspan="${heads.length}"></td></tr>`;
       last = per.d;
       per.grades.forEach((gi, idx) => {
+        let col = 0;
         h += '<tr>';
-        if (idx === 0) h += `<td rowspan="3"><b>${per.dayLabel}</b><br><small class="muted">${esc(per.date)}</small></td><td rowspan="3">${per.p}교시</td>`;
-        h += `<td>${gi.grade}학년</td><td class="subjcol ${gi.parsed.allStudy || gi.parsed.study.length ? 'study' : ''}">${esc(gi.label) || '<span class="muted">시험 없음</span>'}</td>`;
-        for (let c = 1; c <= C; c++) {
+        if (idx === 0) h += `<td rowspan="3" data-c="0"><b>${per.dayLabel}</b><br><small class="muted">${esc(per.date)}</small></td><td rowspan="3" data-c="1">${per.p}교시</td>`;
+        col = 2;
+        h += `<td data-c="${col++}">${gi.grade}학년</td><td data-c="${col++}" class="subjcol ${gi.parsed.allStudy || gi.parsed.study.length ? 'study' : ''}">${esc(gi.label) || '<span class="muted">시험 없음</span>'}</td>`;
+        for (let c = 1; c <= C; c++, col++) {
           const s = model.colSlot(per.d, per.p, gi.grade, c);
-          if (s) h += slotCell(model, ev, s);
-          else if (c > model.classes[gi.grade - 1] || !gi.parsed.active) h += '<td class="excluded"></td>';
-          else if (gi.parsed.exclude.includes(c)) h += '<td class="excluded" title="감독 제외반"></td>';
-          else h += '<td class="excluded">자습</td>';
+          if (s) h += slotCell(model, ev, s, col);
+          else if (c > model.classes[gi.grade - 1] || !gi.parsed.active) h += `<td class="excluded" data-c="${col}"></td>`;
+          else if (gi.parsed.exclude.includes(c)) h += `<td class="excluded" data-c="${col}" title="감독 제외반"></td>`;
+          else h += `<td class="excluded" data-c="${col}">자습</td>`;
         }
-        if (hasSp) { const s = model.slotById.get(`${per.d}-${per.p}-${gi.grade}-sp`); h += s && !s.colNo ? slotCell(model, ev, s) : '<td class="excluded"></td>'; }
-        for (let k = 1; k <= K; k++) { const s = model.slotById.get(`${per.d}-${per.p}-${gi.grade}-r${k}`); h += s ? slotCell(model, ev, s) : '<td class="excluded"></td>'; }
-        if (idx === 0) h += `<td rowspan="3" class="subjcol" style="font-size:11px">${ev.reserves[per.pi].slice(0, 8).map((x) => `${esc(x.name)}(${x.hours})`).join(', ')}${ev.reserves[per.pi].length > 8 ? ` 외 ${ev.reserves[per.pi].length - 8}명` : ''}</td>`;
+        if (hasSp) { const s = model.slotById.get(`${per.d}-${per.p}-${gi.grade}-sp`); h += s && !s.colNo ? slotCell(model, ev, s, col) : `<td class="excluded" data-c="${col}"></td>`; col++; }
+        for (let k = 1; k <= K; k++, col++) { const s = model.slotById.get(`${per.d}-${per.p}-${gi.grade}-r${k}`); h += s ? slotCell(model, ev, s, col) : `<td class="excluded" data-c="${col}"></td>`; }
+        if (idx === 0) h += `<td rowspan="3" data-c="${col}" class="subjcol" style="font-size:11px">${ev.reserves[per.pi].slice(0, 8).map((x) => `${esc(x.name)}(${x.hours})`).join(', ')}${ev.reserves[per.pi].length > 8 ? ` 외 ${ev.reserves[per.pi].length - 8}명` : ''}</td>`;
         h += '</tr>';
       });
     });
@@ -710,10 +717,10 @@
     const P = model.periods;
     const byDay = [];
     P.forEach((per) => { if (!byDay[per.d]) byDay[per.d] = []; byDay[per.d].push(per); });
-    let h = '<table class="res fill"><thead>';
+    let h = `<table class="res fill ${ui.pinMode ? 'pinmode' : ''}"><thead>`;
     h += `<tr><th class="sticky-1" rowspan="5" style="min-width:40px">연번</th><th class="sticky-2" rowspan="5" style="min-width:70px">이름</th><th class="sticky-3" rowspan="5">과목</th>${byDay.map((ps) => `<th colspan="${ps.length}">${ps[0].dayLabel} ${esc(ps[0].date)}</th>`).join('')}${['교실', '복도', '자습', '특수', '이번', '누적'].map((x) => `<th rowspan="5">${x}</th>`).join('')}</tr>`;
-    h += `<tr>${P.map((per) => `<th>${per.p}교시</th>`).join('')}</tr>`;
-    [0, 1, 2].forEach((g) => { h += `<tr>${P.map((per) => `<th class="subj ${per.grades[g].parsed.allStudy || per.grades[g].parsed.study.length ? 'study' : ''}">${per.grades[g].label ? `${g + 1}학년 ${esc(per.grades[g].label)}` : ''}</th>`).join('')}</tr>`; });
+    h += `<tr>${P.map((per, k) => `<th data-c="${3 + k}">${per.p}교시</th>`).join('')}</tr>`;
+    [0, 1, 2].forEach((g) => { h += `<tr>${P.map((per, k) => `<th data-c="${3 + k}" class="subj ${per.grades[g].parsed.allStudy || per.grades[g].parsed.study.length ? 'study' : ''}">${per.grades[g].label ? `${g + 1}학년 ${esc(per.grades[g].label)}` : ''}</th>`).join('')}</tr>`; });
     h += '</thead><tbody>';
     const bal = ev.stats.filter((s) => s.group === 'balance').map((s) => s.prev + s.total);
     const mx = Math.max(...bal), mn = Math.min(...bal);
@@ -734,7 +741,7 @@
         const pin = ids.some((id) => state.result.pinned[id]);
         // 예외 감독자 교시는 회색 "제외"로, 사유는 마우스를 올리면 보임
         const title = isExc ? `예외 감독자${v.length > 2 ? ' · ' + v.slice(3, -1) : ''}` : ids.flatMap((id) => ev.violations[id] || []).join(', ');
-        h += `<td class="${cls} ${viol ? 'viol' : ''}" data-act="pcell" data-name="${esc(st.name)}" data-pi="${per.pi}" title="${esc(title)}">${v === '본인시험' ? '시험' : isExc ? '' : esc(v || '')}${pin ? '<span class="pin">📌</span>' : ''}</td>`;
+        h += `<td class="${cls} ${viol ? 'viol' : ''}" data-act="pcell" data-name="${esc(st.name)}" data-pi="${per.pi}" title="${esc(title)}">${v === '본인시험' ? '시험' : isExc ? '' : esc(v || '')}${ids.length ? pinBtn(pin, `data-act="pin-toggle-p" data-name="${esc(st.name)}" data-pi="${per.pi}"`) : ''}</td>`;
       });
       const tot = st.prev + st.total;
       const hl = st.group === 'balance' && mx !== mn ? (tot === mx ? 'hi' : tot === mn ? 'lo' : '') : '';
@@ -846,6 +853,32 @@
       <details class="cand-group"><summary style="cursor:pointer;font-weight:600;color:var(--ink-2)">규칙상 어려운 선생님 ${no.length}명 — 그래도 넣을 수는 있습니다</summary><div class="cand-list" style="margin-top:6px">${no.map((x) => btn(x, 'no')).join('')}</div></details>`;
   }
 
+  // 결과표를 다시 그리되 스크롤 위치는 그대로
+  function rerenderResult() {
+    const sc = $('.result-table-panel .scroll');
+    const top = sc ? sc.scrollTop : 0, left = sc ? sc.scrollLeft : 0;
+    renderers.result();
+    const sc2 = $('.result-table-panel .scroll');
+    if (sc2) { sc2.scrollTop = top; sc2.scrollLeft = left; }
+  }
+  function togglePin(slotId) {
+    if (!state.result) return;
+    const pin = state.result.pinned;
+    if (pin[slotId]) delete pin[slotId]; else pin[slotId] = true;
+    save(); rerenderResult();
+  }
+  // 개인별 시간표: 그 선생님이 그 교시에 들어간 자리(보통 1개)를 함께 고정/해제
+  function togglePinPerson(name, pi) {
+    if (!state.result) return;
+    const model = currentModel();
+    const ids = model.slots.filter((s) => s.pi === pi && state.result.assign[s.id] === name).map((s) => s.id);
+    if (!ids.length) { toast('이 교시에 배정된 자리가 없습니다. 칸을 눌러 자리를 먼저 넣어 주세요.'); return; }
+    const pin = state.result.pinned;
+    const anyOn = ids.some((id) => pin[id]);
+    ids.forEach((id) => { if (anyOn) delete pin[id]; else pin[id] = true; });
+    save(); rerenderResult();
+  }
+
   async function openSlotEditor(slotId) {
     const model = currentModel();
     const slot = model.slotById.get(slotId);
@@ -897,7 +930,7 @@
       a[slotId] = result.name; pin[slotId] = true;
     }
     save();
-    renderers.result();
+    rerenderResult();
   }
 
   async function openPersonCell(name, pi) {
@@ -924,7 +957,7 @@
     state.result.assign[picked] = name;
     state.result.pinned[picked] = true;
     save();
-    renderers.result();
+    rerenderResult();
   }
 
   async function exportExcel() {
@@ -1310,7 +1343,8 @@
         <li>${co(5)}후보 옆의 작은 글씨는 누적 시수와 그날 들어가는 교시 수입니다.</li>
       </ol>
       <ul>
-        <li>직접 고친 칸은 📌로 고정됩니다. 바꾸지 않고 지금 사람을 그대로 두고 싶을 때는 칸을 누른 뒤 <b>📌 이대로 고정</b>을 누릅니다. <b>다시 돌리기 (📌 유지)</b>는 고정한 칸은 그대로 두고 나머지만 다시 고르게 맞춥니다. 칸을 눌러 <b>고정 풀기</b>로 하나씩, <b>고정 모두 풀기</b>로 한 번에 해제할 수 있습니다.</li>
+        <li>직접 고친 칸은 📌로 고정됩니다. 바꾸지 않고 지금 사람을 그대로 두고 싶을 때는 <b>칸에 마우스를 올리면 나타나는 📌</b>을 누르면 바로 고정되고, 한 번 더 누르면 풀립니다. 여러 칸을 한꺼번에 고정할 때는 머리줄의 <b>📌 고정 모드</b>를 켜 두면 칸을 누를 때마다 고정/해제만 됩니다. <b>다시 돌리기 (📌 유지)</b>는 고정한 칸은 그대로 두고 나머지만 다시 고르게 맞춥니다. <b>고정 모두 풀기</b>로 한 번에 해제할 수 있습니다.</li>
+        <li>표에서 마우스를 올린 칸의 <b>행과 열이 옅게 칠해져</b> 긴 표에서도 어느 교시·어느 선생님인지 바로 보입니다.</li>
         <li>배정 후 입력(과목·교사·예외)을 바꾸면 결과 위에 "입력이 바뀜" 안내가 뜹니다. 바뀐 입력으로 결과를 다시 검사해 보여 주며, 다시 돌리기로 반영합니다.</li>
       </ul>`;
     } },
@@ -1664,9 +1698,12 @@
       case 'rerun': return runAssign(true);
       case 'export': return exportExcel();
       case 'sub': ui.sub = el.dataset.k; saveUI(); return renderers.result();
-      case 'slot': if (!running) openSlotEditor(el.dataset.id); return;
-      case 'pcell': if (!running) openPersonCell(el.dataset.name, +el.dataset.pi); return;
-      case 'unpin-all': state.result.pinned = {}; save(); return renderers.result();
+      case 'slot': if (running) return; if (ui.pinMode) togglePin(el.dataset.id); else openSlotEditor(el.dataset.id); return;
+      case 'pcell': if (running) return; if (ui.pinMode) togglePinPerson(el.dataset.name, +el.dataset.pi); else openPersonCell(el.dataset.name, +el.dataset.pi); return;
+      case 'pin-toggle': if (!running) togglePin(el.dataset.id); return;
+      case 'pin-toggle-p': if (!running) togglePinPerson(el.dataset.name, +el.dataset.pi); return;
+      case 'pin-mode': ui.pinMode = !!el.checked; saveUI(); rerenderResult(); return;
+      case 'unpin-all': state.result.pinned = {}; save(); return rerenderResult();
       case 'clear-result':
         if (!(await confirmBox('결과 지우기', '배정 결과와 직접 고친 내용을 지울까요?', '지우기', 'orange'))) return;
         state.result = null; save(); renderers.result(); updateBadges(); return;
@@ -1674,6 +1711,30 @@
       default:
     }
   });
+
+  // 결과표 행·열 하이라이트: 마우스를 올린 칸의 행과 열에 표시 (열은 data-c, 없으면 cellIndex)
+  let hl = { cell: null, items: [] };
+  const colOf = (cell) => (cell.dataset.c != null ? +cell.dataset.c : cell.cellIndex);
+  function clearHl() { hl.items.forEach((el) => el.classList.remove('hl-row', 'hl-col')); hl = { cell: null, items: [] }; }
+  document.addEventListener('mouseover', (e) => {
+    const cell = e.target.closest && e.target.closest('#tab-result table.res td, #tab-result table.res th');
+    if (!cell) { if (hl.cell && !e.target.closest('#tab-result table.res')) clearHl(); return; }
+    if (cell === hl.cell) return;
+    clearHl();
+    const table = cell.closest('table'), col = colOf(cell), items = [];
+    const row = cell.closest('tr');
+    if (cell.tagName === 'TD' && !row.classList.contains('day-sep')) { row.classList.add('hl-row'); items.push(row); }
+    table.querySelectorAll('tbody tr').forEach((tr) => {
+      if (tr.classList.contains('day-sep')) return;
+      const c = tr.querySelector(`[data-c="${col}"]`) || (tr.cells[0] && tr.cells[0].dataset.c == null ? tr.cells[col] : null);
+      if (c) { c.classList.add('hl-col'); items.push(c); }
+    });
+    table.querySelectorAll(`thead th[data-c="${col}"]`).forEach((th) => { th.classList.add('hl-col'); items.push(th); });
+    const thead = table.tHead;
+    if (thead && thead.rows.length === 1 && !thead.rows[0].cells[0].dataset.c && thead.rows[0].cells[col]) { thead.rows[0].cells[col].classList.add('hl-col'); items.push(thead.rows[0].cells[col]); }
+    hl = { cell, items };
+  });
+  document.addEventListener('mouseleave', (e) => { if (e.target && e.target.matches && e.target.matches('#tab-result table.res')) clearHl(); }, true);
 
   window.addEventListener('storage', (e) => {
     if (e.key === LS_KEY && e.newValue) { state = normalizeState(JSON.parse(e.newValue)); renderAll(); toast('다른 창에서 바뀐 내용을 불러왔습니다.'); }
