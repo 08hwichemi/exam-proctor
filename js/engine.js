@@ -216,10 +216,7 @@
           }
         }
         if (pc.special) {
-          // 장소가 "8반"처럼 반 번호 형식(그 학년 반 수보다 큰 번호)이면 결과표에서 그 번호 열에 바로 넣음(colNo). 그 밖(음악실 등)은 "추가반" 열
-          const mRoom = /^(\d+)\s*반$/.exec(pc.room);
-          const roomNo = mRoom ? parseInt(mRoom[1], 10) : 0;
-          push({ id: `${per.d}-${per.p}-${g}-sp`, kind: 'special', classNo: null, col: 'sp', room: pc.room, colNo: roomNo > cc ? roomNo : null, study: pc.allStudy, label: `${g}-${pc.room}${pc.allStudy ? '(자습)' : ''}` });
+          push({ id: `${per.d}-${per.p}-${g}-sp`, kind: 'special', classNo: null, col: 'sp', room: pc.room, study: pc.allStudy, label: `${g}-${pc.room}${pc.allStudy ? '(자습)' : ''}` });
         }
         for (let k = 1; k <= corridors; k++) {
           push({ id: `${per.d}-${per.p}-${g}-r${k}`, kind: 'corridor', classNo: null, col: `r${k}`, study: false, label: `${g}-복도${k}` });
@@ -336,15 +333,8 @@
     if (!periods.length) issues.push({ level: 'error', msg: '시험 일차가 없습니다.' });
     if (periods.length && !slots.length) issues.push({ level: 'error', msg: '배정할 감독 자리가 없습니다. 과목을 입력해 주세요.' });
 
-    // 결과표 열 구성: 반 열은 반 수와 번호형 추가반(8반 등) 중 큰 쪽까지, 이름형 추가반(음악실 등)은 "추가반" 열
-    const specialByCol = new Map();
-    slots.forEach((s) => { if (s.kind === 'special' && s.colNo) specialByCol.set(`${s.d}-${s.p}-${s.grade}-${s.colNo}`, s); });
-    const gridCols = Math.max(maxClasses, ...slots.map((s) => (s.kind === 'special' && s.colNo) || 0));
-    const hasNamedSpecial = slots.some((s) => s.kind === 'special' && !s.colNo);
-    const colSlot = (d, p, g, c) => slotById.get(`${d}-${p}-${g}-c${c}`) || specialByCol.get(`${d}-${p}-${g}-${c}`) || null;
-
     const model = {
-      term, opts, corridors, classes, maxClasses, gridCols, hasNamedSpecial, colSlot, periods, slots, slotById, teachers, teacherByName,
+      term, opts, corridors, classes, maxClasses, periods, slots, slotById, teachers, teacherByName,
       noRepeatRoom: !!opts.noRepeatRoom, useHistory, compensate3rd: comp,
       specials, exceptions: exceptionsList, ownExam, availP, P, T, D: dayCount, issues,
     };

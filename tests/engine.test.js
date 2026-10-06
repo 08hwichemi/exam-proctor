@@ -139,19 +139,6 @@ if (require.main !== module) return;
   assert.deepStrictEqual(pc.study, [1]); assert.deepStrictEqual(pc.exclude, [2]);
   const pc2 = E.parseCell({ name: '수학*', study: [1], exclude: [] }, 7);
   assert.strictEqual(pc2.room, '8반'); assert.deepStrictEqual(pc2.study, [1]);
-  // 번호형 추가반(8반)은 결과표의 8반 열에, 이름형(음악실)은 "추가반" 열에
-  {
-    const st = makeState(1, '1차 고사');
-    st.days[0].subjects[0][0] = { name: '국어', study: [], exclude: [], special: true, room: '' };   // → 8반
-    st.days[0].subjects[0][1] = { name: '수학', study: [], exclude: [], special: true, room: '음악실' };
-    st.days[0].subjects[0][2] = { name: '영어', study: [], exclude: [], special: true, room: '5반' }; // 반 수(7) 이하 → 이름형 취급
-    const m = E.buildModel(st);
-    const sp = (g) => m.slotById.get(`0-1-${g}-sp`);
-    assert.strictEqual(sp(1).colNo, 8); assert.strictEqual(sp(2).colNo, null); assert.strictEqual(sp(3).colNo, null);
-    assert.strictEqual(m.gridCols, 8); assert.strictEqual(m.hasNamedSpecial, true);
-    assert.strictEqual(m.colSlot(0, 1, 1, 8), sp(1)); assert.strictEqual(m.colSlot(0, 1, 2, 8), null);
-    assert.strictEqual(m.colSlot(0, 1, 1, 3).kind, 'class');
-  }
   const pc3 = E.parseCell({ name: '국어(자습:1,2)(제외:3)' }, 7);
   assert.strictEqual(pc3.examName, '국어'); assert.deepStrictEqual(pc3.study, [1, 2]); assert.deepStrictEqual(pc3.exclude, [3]);
   assert.strictEqual(E.parseCell({ name: '' }, 7).active, false);
