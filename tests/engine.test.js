@@ -144,13 +144,22 @@ if (require.main !== module) return;
     const st = makeState(1, '1차 고사');
     st.days[0].subjects[0][0] = { name: '국어', study: [], exclude: [], special: true, room: '' };   // → 8반
     st.days[0].subjects[0][1] = { name: '수학', study: [], exclude: [], special: true, room: '음악실' };
-    st.days[0].subjects[0][2] = { name: '영어', study: [], exclude: [], special: true, room: '5반' }; // 반 수(7) 이하 → 이름형 취급
+    st.days[0].subjects[0][2] = { name: '영어', study: [], exclude: [], special: true, room: '5반' }; // 5반이 이미 있음 → 추가반 안 만들고 경고
+    st.days[0].subjects[1][2] = { name: '물리', study: [], exclude: [5], special: true, room: '5' };   // 5반이 제외 → 추가반이 5반 열에
     const m = E.buildModel(st);
-    const sp = (g) => m.slotById.get(`0-1-${g}-sp`);
-    assert.strictEqual(sp(1).colNo, 8); assert.strictEqual(sp(2).colNo, null); assert.strictEqual(sp(3).colNo, null);
+    const sp = (g, p) => m.slotById.get(`0-${p || 1}-${g}-sp`);
+    assert.strictEqual(sp(1).colNo, 8); assert.strictEqual(sp(2).colNo, null); assert.strictEqual(sp(3), undefined);
+    assert.strictEqual(sp(3, 2).colNo, 5); assert.strictEqual(sp(3, 2).room, '5반');
     assert.strictEqual(m.gridCols, 8); assert.strictEqual(m.hasNamedSpecial, true);
     assert.strictEqual(m.colSlot(0, 1, 1, 8), sp(1)); assert.strictEqual(m.colSlot(0, 1, 2, 8), null);
-    assert.strictEqual(m.colSlot(0, 1, 1, 3).kind, 'class');
+    assert.strictEqual(m.colSlot(0, 1, 1, 3).kind, 'class'); assert.strictEqual(m.colSlot(0, 2, 3, 5), sp(3, 2));
+    assert.ok(m.issues.some((i) => i.level === 'warn' && i.msg.startsWith('3학년: 추가반 장소가 반 수')), '겹침 경고');
+    // 반 수를 8로 두고 추가반도 "8반"이면: 추가반을 만들지 않고 8반 열 하나만
+    const st2 = makeState(1, '1차 고사'); st2.classes = [8, 7, 7];
+    st2.days[0].subjects[0][0] = { name: '국어', study: [], exclude: [], special: true, room: '8반' };
+    const m2 = E.buildModel(st2);
+    assert.strictEqual(m2.slotById.get('0-1-1-sp'), undefined); assert.strictEqual(m2.gridCols, 8); assert.strictEqual(m2.hasNamedSpecial, false);
+    assert.strictEqual(m2.colSlot(0, 1, 1, 8).kind, 'class');
   }
   const pc3 = E.parseCell({ name: '국어(자습:1,2)(제외:3)' }, 7);
   assert.strictEqual(pc3.examName, '국어'); assert.deepStrictEqual(pc3.study, [1, 2]); assert.deepStrictEqual(pc3.exclude, [3]);

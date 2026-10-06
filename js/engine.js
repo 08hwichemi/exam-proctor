@@ -185,6 +185,7 @@
 
     // ---- 자리(slot)
     const slots = [];
+    const dupSpecial = {}; // 학년별: 추가반 장소가 이미 있는 반 번호와 겹쳐 만들지 않은 교시 수
     const maxClasses = Math.max(...classes);
     periods.forEach((per) => {
       const day = state.days[per.d];
@@ -216,10 +217,16 @@
           }
         }
         if (pc.special) {
-          // 장소가 "8반"처럼 반 번호 형식(그 학년 반 수보다 큰 번호)이면 결과표에서 그 번호 열에 바로 넣음(colNo). 그 밖(음악실 등)은 "추가반" 열
-          const mRoom = /^(\d+)\s*반$/.exec(pc.room);
+          // 추가반 = 그 번호의 반. 장소가 "8반"(또는 "8")처럼 번호면 결과표의 그 번호 열에 바로 넣음(colNo). 음악실 같은 이름만 "추가반" 열
+          const mRoom = /^(\d+)\s*반?$/.exec(pc.room);
           const roomNo = mRoom ? parseInt(mRoom[1], 10) : 0;
-          push({ id: `${per.d}-${per.p}-${g}-sp`, kind: 'special', classNo: null, col: 'sp', room: pc.room, colNo: roomNo > cc ? roomNo : null, study: pc.allStudy, label: `${g}-${pc.room}${pc.allStudy ? '(자습)' : ''}` });
+          const hasClassSlot = roomNo >= 1 && roomNo <= cc && !skipClassrooms && !pc.exclude.includes(roomNo);
+          if (hasClassSlot) {
+            // 반 수가 8인데 추가반 장소도 "8반"이면 같은 교실이 둘이 되므로 추가반을 만들지 않고 알림
+            dupSpecial[g] = (dupSpecial[g] || 0) + 1;
+          } else {
+            push({ id: `${per.d}-${per.p}-${g}-sp`, kind: 'special', classNo: null, col: 'sp', room: roomNo ? `${roomNo}반` : pc.room, colNo: roomNo || null, study: pc.allStudy, label: `${g}-${roomNo ? roomNo + '반' : pc.room}${pc.allStudy ? '(자습)' : ''}` });
+          }
         }
         for (let k = 1; k <= corridors; k++) {
           push({ id: `${per.d}-${per.p}-${g}-r${k}`, kind: 'corridor', classNo: null, col: `r${k}`, study: false, label: `${g}-복도${k}` });
@@ -335,6 +342,9 @@
     if (!teachers.length) issues.push({ level: 'error', msg: '교사 명단이 비어 있습니다.' });
     if (!periods.length) issues.push({ level: 'error', msg: '시험 일차가 없습니다.' });
     if (periods.length && !slots.length) issues.push({ level: 'error', msg: '배정할 감독 자리가 없습니다. 과목을 입력해 주세요.' });
+    Object.keys(dupSpecial).forEach((g) => {
+      issues.push({ level: 'warn', msg: `${g}학년: 추가반 장소가 반 수(${classes[g - 1]}반) 안의 번호와 겹치는 교시가 ${dupSpecial[g]}개 있어 추가반을 따로 만들지 않았습니다. 그 번호 반이 곧 추가반이라면 1단계에서 반 수를 ${classes[g - 1] - 1}로 두고 필요한 교시에만 +추가반을 누르세요.` });
+    });
 
     // 결과표 열 구성: 반 열은 반 수와 번호형 추가반(8반 등) 중 큰 쪽까지, 이름형 추가반(음악실 등)은 "추가반" 열
     const specialByCol = new Map();
