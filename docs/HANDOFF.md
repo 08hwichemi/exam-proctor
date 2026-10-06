@@ -25,6 +25,7 @@
 | `vendor/exceljs.min.js` | ExcelJS 4.4.0 동봉(학교망 CDN 차단 대비). 글꼴(Pretendard)만 CDN이며 막히면 시스템 글꼴로 대체 |
 | `tests/engine.test.js` | 엔진 단위·통합 테스트 + 예전 파이썬 방식(500회 몬테카를로) 이식본과 비교 |
 | `tests/verify.js` | 검증 리포트: 하한선 비교, 1~4차 연간 시뮬레이션, 같은 교실 금지 영향 |
+| `tests/browser.test.js` | 브라우저 통합 검사(Playwright + 동봉 Chromium). 정적 서버를 띄우고 입력 → 배정 → 칸 수정·📌 → 엑셀·백업 저장 → 새로고침 → 누적 불러오기 → 누적 반영 → 백업 불러오기 → 설명서 → 초기화까지 22단계. 암호 화면은 `js/config.js` 요청을 빈 설정으로 가로채 건너뜀 |
 
 ## 상태(state) 구조 요약
 
@@ -76,9 +77,12 @@ cell = { name, study: [반], exclude: [반], special, room, multi }
 ```
 node tests/engine.test.js      # 엔진 테스트
 node tests/verify.js [1]       # 검증 리포트 (1 = 빠르게)
+node tests/browser.test.js     # 브라우저 통합 검사 (--show 창 보기, --slow 천천히). 약 20초
 python3 -m http.server 8765    # 로컬 확인
 ```
-브라우저 자동 테스트 스크립트는 세션 임시 폴더에 있었고 저장소에는 없음. 필요하면 Playwright(동봉 Chromium)로 다시 작성: 처음 안내창 닫기 → 과목 붙여넣기/추가반/두 과목 → 교사 붙여넣기 → 예외 추가 → 배정 → 칸 수정·맞바꾸기 → 엑셀·백업 저장 → 새로고침 복원 → 이전 결과 엑셀에서 누적·교실 이력 불러오기.
+브라우저 검사 요령(`tests/browser.test.js`에 구현돼 있음): Playwright는 `require('playwright')` 또는 `/opt/node-tools/node_modules/playwright`에서 찾고, 브라우저는 `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`의 Chromium. `js/config.js` 요청을 `window.PROCTOR_AUTH = { url: "", anonKey: "" }`로 가로채 암호 화면을 건너뛰고, 글꼴 CDN은 막음(학교망과 같은 조건). `examProctor.ui`에 `{tab, sub, seenIntro:true}`를 넣어 처음 안내창 없이 원하는 탭에서 시작. UI 선택자(`data-act`, `data-bind`, `data-id`, `.pinbtn`, `.hl-row` 등)를 바꾸면 이 스크립트도 같이 손봐야 함.
+- 헤드리스 Chromium은 **한글 파일 이름**의 다운로드를 `download`로 보고함(ASCII 이름은 정상). 실제 Chrome에서는 문제없고 사용자도 엑셀·백업을 저장해 왔으므로 앱은 손대지 않았고, 검사는 `<a download>` 속성에서 앱이 붙인 이름을 읽어 확인함.
+- 누적 범위 검사는 "가능 교시를 다 채운 교사"(예외·본인 시험으로 들어갈 자리가 1~2개뿐인 분)를 빼고 봄. 보기 자료에서 교사21(영어, 2일차 종일 예외)이 가능 교시 1개라 전체 범위는 2~6으로 보이지만 나머지 일반 교사는 전원 같은 시수였음(엔진 문제 아님).
 
 ## 사용자가 아직 확인하지 않은 것 / 다음 후보
 
@@ -87,4 +91,4 @@ python3 -m http.server 8765    # 로컬 확인
 - 모바일은 보조 수준(과목 표 가로 스크롤).
 - 접속 암호 화면은 사용자가 실제 배포에서 암호 설정·접속까지 확인함(2026-10-04). 이 작업 환경에서는 `*.supabase.co`가 막혀 있어 직접 호출 시험은 불가.
 - 사용자가 아직 확인 안 한 것: #17·#18(추가반 다음 번호 열, 순회 우선 배치, 핀 버튼·고정 모드·하이라이트)을 실제 명단으로 돌린 결과. 반 수를 7로 고친 뒤 "처음부터 새로 배정"을 돌려 보라고 안내함.
-- 브라우저 자동 검사 스크립트는 세션 임시 폴더에만 있었음(저장소에 없음). 다시 만들 때 요령: Playwright(동봉 Chromium `/opt/pw-browsers/chromium`)로 `js/config.js` 요청을 `window.PROCTOR_AUTH = { url: "", anonKey: "" }`로 가로채면 암호 화면 없이 열림. `tests/engine.test.js`의 `makeState(seed, term)`를 localStorage `examProctor.v2`에 넣고 `examProctor.ui`에 `{tab, sub, seenIntro:true}`를 넣으면 원하는 탭에서 시작.
+- 브라우저 통합 검사는 이제 저장소에 있음(`tests/browser.test.js`, 2026-10-06). #17·#18 기능(추가반 8반 열, 순회 우선 배치, 핀 버튼·고정 모드·행·열 하이라이트, 제외·예외 칸 회색)이 보기 자료(교사 48명·2일 5교시)로는 모두 기대대로 동작함을 확인. 실제 명단으로는 아직 사용자 확인 전.

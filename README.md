@@ -45,7 +45,7 @@ js/config.js      접속 암호 확인용 Supabase 주소·공개 키
 js/auth.js        접속 암호 확인·변경 호출
 docs/supabase-access.sql  Supabase 쪽 표·함수 원본
 vendor/           ExcelJS 4.4.0 (MIT)
-tests/            엔진 테스트 (node tests/engine.test.js), 검증 리포트 (node tests/verify.js)
+tests/            엔진 테스트 (node tests/engine.test.js), 검증 리포트 (node tests/verify.js), 브라우저 통합 검사 (node tests/browser.test.js)
 main.py, keygen.py  예전 파이썬(PyQt) 프로그램 — 참고용으로 남겨 둠
 ```
 
@@ -109,6 +109,7 @@ main.py, keygen.py  예전 파이썬(PyQt) 프로그램 — 참고용으로 남�
 
 ```
 node tests/engine.test.js   # 엔진 테스트 + 예전 방식과 비교
+node tests/browser.test.js  # 브라우저 통합 검사 (Playwright + Chromium 필요, 입력부터 엑셀 저장·누적 반영까지 실제 화면으로)
 python3 -m http.server      # http://localhost:8000 에서 확인
 ```
 
