@@ -673,13 +673,14 @@
     const v = ev.violations[s.id];
     const cls = ['slot', name ? '' : 'empty', s.study ? 'study' : '', s.kind === 'corridor' ? 'corr' : '', v ? 'viol' : ''].filter(Boolean).join(' ');
     const title = v ? v.join(', ') : '';
-    const label = name ? esc(name) + (s.kind === 'special' ? `<small class="muted">(${esc(s.room)})</small>` : '') : '부족';
+    // 번호형 추가반(8반)은 그 번호 열에 들어가므로 장소를 덧붙이지 않음
+    const label = name ? esc(name) + (s.kind === 'special' && !s.colNo ? `<small class="muted">(${esc(s.room)})</small>` : '') : '부족';
     return `<td class="${cls}" data-act="slot" data-id="${s.id}" title="${esc(title)}">${label}${r.pinned[s.id] ? '<span class="pin">📌</span>' : ''}</td>`;
   }
 
   function gridTable(model, ev) {
-    const C = model.maxClasses, K = model.corridors;
-    const hasSp = model.slots.some((s) => s.kind === 'special');
+    const C = model.gridCols, K = model.corridors;
+    const hasSp = model.hasNamedSpecial;
     let h = `<table class="res fill"><thead><tr><th>일차</th><th>교시</th><th>학년</th><th>과목</th>${range(1, C).map((c) => `<th>${c}반</th>`).join('')}${hasSp ? '<th>추가반</th>' : ''}${range(1, K).map((k) => `<th>복도${k}</th>`).join('')}<th>예비 (누적 적은 순)</th></tr></thead><tbody>`;
     let last = -1;
     model.periods.forEach((per) => {
@@ -690,13 +691,13 @@
         if (idx === 0) h += `<td rowspan="3"><b>${per.dayLabel}</b><br><small class="muted">${esc(per.date)}</small></td><td rowspan="3">${per.p}교시</td>`;
         h += `<td>${gi.grade}학년</td><td class="subjcol ${gi.parsed.allStudy || gi.parsed.study.length ? 'study' : ''}">${esc(gi.label) || '<span class="muted">시험 없음</span>'}</td>`;
         for (let c = 1; c <= C; c++) {
-          const s = model.slotById.get(`${per.d}-${per.p}-${gi.grade}-c${c}`);
+          const s = model.colSlot(per.d, per.p, gi.grade, c);
           if (s) h += slotCell(model, ev, s);
-          else if (gi.parsed.active && gi.parsed.exclude.includes(c)) h += '<td class="excluded">제외</td>';
           else if (c > model.classes[gi.grade - 1] || !gi.parsed.active) h += '<td class="excluded"></td>';
+          else if (gi.parsed.exclude.includes(c)) h += '<td class="excluded">제외</td>';
           else h += '<td class="excluded">자습</td>';
         }
-        if (hasSp) { const s = model.slotById.get(`${per.d}-${per.p}-${gi.grade}-sp`); h += s ? slotCell(model, ev, s) : '<td class="excluded"></td>'; }
+        if (hasSp) { const s = model.slotById.get(`${per.d}-${per.p}-${gi.grade}-sp`); h += s && !s.colNo ? slotCell(model, ev, s) : '<td class="excluded"></td>'; }
         for (let k = 1; k <= K; k++) { const s = model.slotById.get(`${per.d}-${per.p}-${gi.grade}-r${k}`); h += s ? slotCell(model, ev, s) : '<td class="excluded"></td>'; }
         if (idx === 0) h += `<td rowspan="3" class="subjcol" style="font-size:11px">${ev.reserves[per.pi].slice(0, 8).map((x) => `${esc(x.name)}(${x.hours})`).join(', ')}${ev.reserves[per.pi].length > 8 ? ` 외 ${ev.reserves[per.pi].length - 8}명` : ''}</td>`;
         h += '</tr>';
@@ -1203,7 +1204,7 @@
       <ol class="co-list">
         <li>${co(1)}<b>엑셀에서 붙여넣기</b> — 큰 입력창을 엽니다. 1·2·3학년 세 열(또는 일차·시험일·교시가 포함된 여섯 열)을 붙여넣으면 1일차 1교시부터 차례로 채웁니다.</li>
         <li>${co(2)}<b>과목명</b> — 그 교시 그 학년의 시험 과목. <b>비워 두면 "시험 없음"</b>으로 보고 감독을 넣지 않습니다. <code>자습</code>이라고 적으면 학년 전체 자습입니다.</li>
-        <li>${co(3)}<b>+추가반</b> — 이동수업 등으로 교실이 하나 더 필요할 때 누릅니다. 아래에 나타나는 칸에 장소(예: 어학실)를 적으면 결과와 엑셀에 그 이름이 들어가고, 비우면 "8반"처럼 마지막 반 다음 번호가 됩니다.</li>
+        <li>${co(3)}<b>+추가반</b> — 이동수업 등으로 교실이 하나 더 필요할 때 누릅니다. 아래에 나타나는 칸에 장소(예: 어학실)를 적으면 결과와 엑셀의 <b>추가반</b> 열에 그 이름이 들어가고, 비우면 "8반"처럼 마지막 반 다음 번호가 되어 결과표의 <b>8반 열</b>에 바로 들어갑니다.</li>
         <li>${co(4)}<b>+과목</b> — 같은 시간에 두 과목이 치러지면 눌러서 두 번째 칸에 적습니다. 두 과목 교사 모두 그 시간 감독에서 빠지며, 결과·엑셀에는 <code>세계사/경제</code>처럼 표시됩니다. 교실은 반 수대로 하나씩이므로 추가반은 하나면 됩니다.</li>
         <li>${co(5)}<b>자습 번호</b> ${swatch('#ffe58a')} — 그 반이 자습임을 표시합니다. 자습 교실 감독은 "자습 시수"로 따로 셉니다. <b>자습</b> 글자를 누르면 모든 반을 한 번에 켜고 끕니다.</li>
         <li>${co(6)}<b>제외 번호</b> ${swatch('#ffc9c9')} — 그 반에는 감독을 넣지 않습니다(예: 그 반 학생 전원이 다른 곳에서 시험). 같은 반을 자습과 제외에 동시에 켤 수 없으며, 나중에 누른 쪽이 남습니다.</li>
