@@ -125,8 +125,8 @@
     const ws3 = wb.addWorksheet('결과_개인별시간표', { views: [{ state: 'frozen', xSplit: 3, ySplit: 5 }] });
     [ws1, ws2, ws3].forEach((ws) => { ws.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 }; });
 
-    const C = model.gridCols, K = model.corridors; // 번호형 추가반(8반)은 반 열에 포함
-    const hasSpecial = model.hasNamedSpecial;
+    const C = model.maxClasses, K = model.corridors;
+    const hasSpecial = model.slots.some((s) => s.kind === 'special');
 
     // ---------- [1] 결과_감독표
     const head1 = ['일차', '교시', '학년', '과목'];
@@ -147,14 +147,13 @@
         const vals = [idx === 0 ? `${per.dayLabel}${per.date ? '\n' + per.date : ''}` : '', idx === 0 ? `${per.p}교시` : '', `${gi.grade}학년`, gi.label];
         const kinds = [];
         for (let c = 1; c <= C; c++) {
-          const s = model.colSlot(per.d, per.p, gi.grade, c);
+          const s = model.slotById.get(`${per.d}-${per.p}-${gi.grade}-c${c}`);
           if (s) { vals.push(assign[s.id] || '부족'); kinds.push(s); }
-          else { vals.push(gi.parsed.active && c <= model.classes[gi.grade - 1] && gi.parsed.exclude.includes(c) ? '(제외)' : ''); kinds.push(null); }
+          else { vals.push(gi.parsed.active && gi.parsed.exclude.includes(c) ? '(제외)' : ''); kinds.push(null); }
         }
         if (hasSpecial) {
           const s = model.slotById.get(`${per.d}-${per.p}-${gi.grade}-sp`);
-          const named = s && !s.colNo ? s : null;
-          vals.push(named ? `${assign[named.id] || '부족'}(${named.room})` : ''); kinds.push(named);
+          vals.push(s ? `${assign[s.id] || '부족'}(${s.room})` : ''); kinds.push(s || null);
         }
         for (let k = 1; k <= K; k++) {
           const s = model.slotById.get(`${per.d}-${per.p}-${gi.grade}-r${k}`);
