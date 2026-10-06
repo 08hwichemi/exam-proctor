@@ -628,6 +628,7 @@
             <span class="legend"><i style="background:#fff4c2"></i>자습</span>
             <span class="legend"><i style="background:#ece8fb"></i>복도</span>
             <span class="legend"><i style="background:#dbeafe"></i>본인 시험</span>
+            <span class="legend"><i style="background:#e9ecf1;border-color:#cfd4dc"></i>예외 제외</span>
             <span class="legend"><i style="background:#fce7f3"></i>예비</span>
             <span class="legend"><i style="background:#fef2f2;border-color:#f1b0b0"></i>부족</span>
             <span class="muted">⚠ 규칙 위반(마우스를 올리면 이유) · 📌 직접 고친 칸</span>
@@ -721,14 +722,18 @@
       P.forEach((per) => {
         const v = st.cells[per.pi];
         let cls = 'slot';
+        const isExc = !!v && v.startsWith('예외');
         if (v === '본인시험') cls += ' own';
+        else if (isExc) cls += ' exc';
         else if (v && v.startsWith('특수(')) cls += ' spc';
         else if (v && v.includes('복도')) cls += ' corr';
         else if (v && v.includes('자습')) cls += ' study';
-        const ids = v && v !== '본인시험' && !v.startsWith('특수(') ? model.slots.filter((s) => s.pi === per.pi && state.result.assign[s.id] === st.name).map((s) => s.id) : [];
+        const ids = v && v !== '본인시험' && !isExc && !v.startsWith('특수(') ? model.slots.filter((s) => s.pi === per.pi && state.result.assign[s.id] === st.name).map((s) => s.id) : [];
         const viol = ids.some((id) => ev.violations[id]);
         const pin = ids.some((id) => state.result.pinned[id]);
-        h += `<td class="${cls} ${viol ? 'viol' : ''}" data-act="pcell" data-name="${esc(st.name)}" data-pi="${per.pi}" title="${esc(ids.flatMap((id) => ev.violations[id] || []).join(', '))}">${v === '본인시험' ? '시험' : esc(v || '')}${pin ? '<span class="pin">📌</span>' : ''}</td>`;
+        // 예외 감독자 교시는 회색 "제외"로, 사유는 마우스를 올리면 보임
+        const title = isExc ? `예외 감독자${v.length > 2 ? ' · ' + v.slice(3, -1) : ''}` : ids.flatMap((id) => ev.violations[id] || []).join(', ');
+        h += `<td class="${cls} ${viol ? 'viol' : ''}" data-act="pcell" data-name="${esc(st.name)}" data-pi="${per.pi}" title="${esc(title)}">${v === '본인시험' ? '시험' : isExc ? '제외' : esc(v || '')}${pin ? '<span class="pin">📌</span>' : ''}</td>`;
       });
       const tot = st.prev + st.total;
       const hl = st.group === 'balance' && mx !== mn ? (tot === mx ? 'hi' : tot === mn ? 'lo' : '') : '';
@@ -1277,7 +1282,7 @@
       ${shot(person, '.result-table-panel', [['table.res thead th.subj', 1], ['td.slot.own', 2], ['table.res tbody tr:first-child td:last-child', 3]], { title: '개인별 시간표' })}
       <ol class="co-list">
         <li>${co(1)}머리글에 그 교시의 학년별 과목이 보입니다.</li>
-        <li>${co(2)}파란 칸은 본인 과목 시험이라 감독에서 빠진 교시입니다. 비어 있는 칸을 누르면 그 선생님을 그 교시의 어느 자리에 넣을지 고를 수 있습니다.</li>
+        <li>${co(2)}파란 칸은 본인 과목 시험이라 감독에서 빠진 교시, 회색 <b>제외</b> 칸은 3단계에서 예외(출장·연가 등)로 적은 교시입니다(마우스를 올리면 사유). 비어 있는 칸을 누르면 그 선생님을 그 교시의 어느 자리에 넣을지 고를 수 있습니다.</li>
         <li>${co(3)}오른쪽 끝은 교실·복도·자습·특수 시수, 이번 합계, 전체 누적입니다. 시수표의 <b>가능 교시</b>는 그 선생님이 이번 시험에서 들어갈 수 있는 교시 수로, 본인 과목 시험이 많거나 고사담당이면 적습니다. 이런 분이 적게 배정되는 것은 규칙 때문이지 오류가 아닙니다.</li>
       </ol>`;
     } },
@@ -1310,7 +1315,7 @@
     { id: 's5-excel', title: '엑셀 저장과 다음 회차', anchors: [], html() {
       return `
       <p class="lead"><b>엑셀로 저장</b>을 누르면 시트 세 개가 든 파일 하나를 받습니다. 게시용·보관용으로 쓰고, 다음 회차에서 누적을 불러올 때도 이 파일을 씁니다.</p>
-      ${kv([['결과_감독표', '일차·교시·학년별로 1반~N반, 추가반, 복도 감독 이름. 자습 칸은 노란색, 부족 칸은 빨간색, 비고에 특수실과 예외 사유. <b>게시용</b>입니다.'], ['결과_시수표', '교사별 교실·복도·자습·특수실 시수, 이번 합계, 이전 누적, 전체 누적. <b>다음 회차에서 누적을 불러올 때 이 시트를 읽습니다.</b>'], ['결과_개인별시간표', '교사별 교시 배정(예: 2-3, 1-복도1, 3-과학실, (자습) 표시). 본인 시험 교시는 파란색, 아래에 교시별 예비 명단(분홍). 통계 열은 엑셀 수식이라 손으로 고쳐도 다시 계산되고, 복도·자습 색도 따라갑니다. 다음 회차의 교실 이력은 이 시트에서 읽습니다.']], ['시트', '내용'])}
+      ${kv([['결과_감독표', '일차·교시·학년별로 1반~N반, 추가반, 복도 감독 이름. 자습 칸은 노란색, 부족 칸은 빨간색, 비고에 특수실과 예외 사유. <b>게시용</b>입니다.'], ['결과_시수표', '교사별 교실·복도·자습·특수실 시수, 이번 합계, 이전 누적, 전체 누적. <b>다음 회차에서 누적을 불러올 때 이 시트를 읽습니다.</b>'], ['결과_개인별시간표', '교사별 교시 배정(예: 2-3, 1-복도1, 3-과학실, (자습) 표시). 본인 시험 교시는 파란색, 예외 감독자 교시는 회색 "제외", 아래에 교시별 예비 명단(분홍). 통계 열은 엑셀 수식이라 손으로 고쳐도 다시 계산되고, 복도·자습 색도 따라갑니다. 다음 회차의 교실 이력은 이 시트에서 읽습니다.']], ['시트', '내용'])}
       <div class="note">엑셀에서 긴 이름(예: 특수(지능형과학실))은 셀 크기에 맞춰 글자가 줄어들도록 저장됩니다. 머리글의 과목명은 줄바꿈으로 전부 보입니다.</div>
       <h3>다음 회차로 넘어가기</h3>
       <ol class="steps-list">

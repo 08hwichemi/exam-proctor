@@ -226,6 +226,7 @@
       model.periods.forEach((per) => {
         const v = st.cells[per.pi];
         if (v === '본인시험') { vals.push(''); fills.push(F.blue); }
+        else if (v && v.startsWith('예외')) { vals.push('제외'); fills.push(F.gray); } // 예외 감독자(출장·연가) 교시는 회색 "제외"
         else { vals.push(v || ''); fills.push(null); }
       });
       const rn = ws3.rowCount + 1;
@@ -245,7 +246,7 @@
       row.eachCell({ includeEmpty: true }, (cell, cn) => {
         cell.border = BORDER;
         cell.alignment = cn === 3 || (cn >= firstP && cn < statCol) ? SHRINK : CENTER;
-        if (cn >= firstP && cn < statCol) { cell.numFmt = '@'; if (fills[cn - firstP]) cell.fill = fills[cn - firstP]; }
+        if (cn >= firstP && cn < statCol) { cell.numFmt = '@'; if (fills[cn - firstP]) cell.fill = fills[cn - firstP]; if (cell.value === '제외') cell.font = { color: { argb: 'FF999999' }, size: 9 }; }
         if (t.type === '제외') cell.font = { color: { argb: 'FF999999' } };
       });
     });

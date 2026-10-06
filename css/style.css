@@ -362,6 +362,7 @@ table.res td.corr { background: var(--corr); }
 table.res td.own { background: var(--own); color: #3b63c4; font-size: 11px; }
 table.res td.spc { background: #f1edff; font-size: 11px; }
 table.res td.excluded { color: var(--ink-3); font-size: 11px; background: var(--surface-2); }
+table.res td.exc { color: #6b7280; font-size: 11px; background: #e9ecf1; } /* 예외 감독자(출장·연가) 교시 */
 table.res td.viol { box-shadow: inset 0 0 0 2px var(--bad); }
 table.res td.viol::after { content: " ⚠"; color: var(--bad); }
 table.res td .pin { font-size: 10px; margin-left: 2px; }
